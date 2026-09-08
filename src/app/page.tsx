@@ -101,7 +101,7 @@ export default function Home() {
           <h1>
             Assistant <span className="accent">ESVL</span> Basket
           </h1>
-          <p className="sub">Les matchs du week-end, prêts à partager.</p>
+          <p className="sub">Le club, match après match.</p>
         </div>
       </header>
 
@@ -408,7 +408,7 @@ function linkify(text: string) {
 const fmtUsd = (v: number) => (v === 0 ? "$0" : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(3)}`);
 
 function ChatPanel() {
-  const [vendor, setVendor] = useState<Vendor>("anthropic");
+  const vendor: Vendor = "anthropic"; // Claude only for now (provider stays swappable under the hood)
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -452,18 +452,6 @@ function ChatPanel() {
 
   return (
     <div>
-      <div className="chat-toolbar">
-        <div className="seg" role="group" aria-label="Modèle">
-          <button aria-pressed={vendor === "anthropic"} onClick={() => setVendor("anthropic")}>
-            Claude Haiku
-          </button>
-          <button aria-pressed={vendor === "google"} onClick={() => setVendor("google")}>
-            Gemini Flash
-          </button>
-        </div>
-        <span className="hint">agent · tool-use · coûts mesurés</span>
-      </div>
-
       <div className="messages">
         {messages.length === 0 && (
           <div className="suggestions">
