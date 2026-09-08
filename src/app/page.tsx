@@ -1,28 +1,269 @@
 "use client";
 
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import type { Recap } from "@/lib/brief/recap";
+import type { Weekend, WeekendFixture } from "@/lib/brief/weekend";
+
+const DEFAULT_ORG = "10135"; // ES Villeneuve-Loubet Basket (pilot club)
+
+/* ---------- shared helpers ---------- */
+
+function ping(event: string, org: string, label?: string) {
+  try {
+    fetch("/api/metric", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event, org, label }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* metrics must never break the UI */
+  }
+}
+
+async function shareText(text: string, org: string, label?: string) {
+  ping("share", org, label);
+  if (typeof navigator !== "undefined" && navigator.share) {
+    try {
+      await navigator.share({ text });
+      return;
+    } catch {
+      /* cancelled or unsupported → fall through to WhatsApp */
+    }
+  }
+  window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+}
+
+/* ---------- page ---------- */
+
+type Tab = "weekend" | "recap" | "chat";
+
+export default function Home() {
+  const [tab, setTab] = useState<Tab>("weekend");
+  return (
+    <div className="app">
+      <header className="header">
+        <h1>
+          Assistant <span className="accent">ESVL</span> Basket
+        </h1>
+        <p className="sub">// brief du week-end · résultats · assistant — données publiques FFBB</p>
+      </header>
+
+      <nav className="tabs" role="tablist">
+        <button className="tab" role="tab" aria-selected={tab === "weekend"} onClick={() => setTab("weekend")}>
+          Week-end
+        </button>
+        <button className="tab" role="tab" aria-selected={tab === "recap"} onClick={() => setTab("recap")}>
+          Résultats
+        </button>
+        <button className="tab" role="tab" aria-selected={tab === "chat"} onClick={() => setTab("chat")}>
+          Assistant
+        </button>
+      </nav>
+
+      {tab === "weekend" && <WeekendPanel org={DEFAULT_ORG} />}
+      {tab === "recap" && <RecapPanel org={DEFAULT_ORG} />}
+      {tab === "chat" && <ChatPanel />}
+
+      <footer className="footer">
+        Assistant non officiel, non affilié à la FFBB. Données publiques FFBB, mises en cache. Projet de démonstration.
+      </footer>
+    </div>
+  );
+}
+
+/* ---------- weekend ---------- */
+
+function WeekendPanel({ org }: { org: string }) {
+  const [data, setData] = useState<Weekend | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    ping("weekend_view", org);
+    fetch(`/api/weekend?org=${org}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        if (d.error) setError(d.error);
+        else setData(d);
+      })
+      .catch(() => alive && setError("Impossible de charger les rencontres."));
+    return () => {
+      alive = false;
+    };
+  }, [org]);
+
+  if (error) return <div className="error">⚠ {error}</div>;
+  if (!data) return <div className="loading">Chargement des rencontres…</div>;
+
+  return (
+    <div>
+      <div className="panel-head">
+        <div className="club">{data.club}</div>
+        <div className="season">Prochaines rencontres · {data.season}</div>
+      </div>
+      {data.fixtures.length === 0 ? (
+        <div className="empty">Aucune rencontre à venir pour l'instant — la saison n'a peut-être pas encore démarré.</div>
+      ) : (
+        <div className="fixtures">
+          {data.fixtures.map((fx) => (
+            <FixtureRow key={fx.code + fx.dateISO} fx={fx} org={data.orgId} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const copy = async () => {
+    ping("copy", org, fx.code);
+    try {
+      await navigator.clipboard.writeText(fx.message);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      setOpen(true);
+    }
+  };
+
+  return (
+    <div className={`fixture${fx.thisWeekend ? " soon" : ""}`}>
+      <div className="fx-top">
+        <span className="fx-team">{fx.team}</span>
+        <span className={`badge-ha ${fx.homeAway === "domicile" ? "home" : "away"}`}>
+          {fx.homeAway === "domicile" ? "domicile" : "extérieur"}
+        </span>
+        {fx.thisWeekend && <span className="tag-soon">● ce week-end</span>}
+      </div>
+      <div className="fx-vs">vs {fx.opponent}</div>
+      <div className="fx-meta">
+        {[fx.dateLabel, fx.timeLabel && `à ${fx.timeLabel}`, fx.venue && `· ${fx.venue}${fx.venueCity ? ` (${fx.venueCity})` : ""}`]
+          .filter(Boolean)
+          .join(" ")}
+      </div>
+      <div className="fx-actions">
+        <button className="btn primary" onClick={() => shareText(fx.message, org, fx.code)}>
+          Partager
+        </button>
+        <button className="btn" onClick={copy}>
+          {copied ? "Copié !" : "Copier"}
+        </button>
+        <button className="btn link" onClick={() => setOpen((o) => !o)}>
+          {open ? "Masquer" : "Voir le message"}
+        </button>
+      </div>
+      {open && <pre className="msg-pre">{fx.message}</pre>}
+    </div>
+  );
+}
+
+/* ---------- recap ---------- */
+
+function RecapPanel({ org }: { org: string }) {
+  const [data, setData] = useState<Recap | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    ping("recap_view", org);
+    fetch(`/api/recap?org=${org}`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (!alive) return;
+        if (d.error) setError(d.error);
+        else setData(d);
+      })
+      .catch(() => alive && setError("Impossible de charger les résultats."));
+    return () => {
+      alive = false;
+    };
+  }, [org]);
+
+  if (error) return <div className="error">⚠ {error}</div>;
+  if (!data) return <div className="loading">Chargement des résultats…</div>;
+
+  const copy = async () => {
+    ping("recap_copy", org);
+    try {
+      await navigator.clipboard.writeText(data.post);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch {
+      /* ignore */
+    }
+  };
+
+  return (
+    <div>
+      <div className="panel-head">
+        <div className="club">{data.club}</div>
+        <div className="season">Récap à publier · {data.season}</div>
+      </div>
+      <pre className="msg-pre">{data.post}</pre>
+      <div className="recap-actions">
+        <button className="btn primary" onClick={() => shareText(data.post, org)}>
+          Partager
+        </button>
+        <button className="btn" onClick={copy}>
+          {copied ? "Copié !" : "Copier le post"}
+        </button>
+        <button className="btn" onClick={() => downloadRecapImage(data.post, data.club)}>
+          Télécharger l'image
+        </button>
+      </div>
+      {!data.hasResults && <p className="empty">Le visuel et le post se rempliront après la première journée.</p>}
+    </div>
+  );
+}
+
+function downloadRecapImage(post: string, club: string) {
+  const lines = post.split("\n");
+  const pad = 56;
+  const lineH = 46;
+  const width = 1080;
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = pad * 2 + lines.length * lineH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = "#0b0e12";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#ff7a1a";
+  ctx.fillRect(0, 0, width, 12);
+  ctx.textBaseline = "top";
+  let y = pad;
+  lines.forEach((ln, i) => {
+    ctx.font = i === 0 ? '700 42px "IBM Plex Mono", monospace' : '400 30px "IBM Plex Mono", monospace';
+    ctx.fillStyle = i === 0 ? "#ff7a1a" : "#e7ecf2";
+    ctx.fillText(ln, pad, y);
+    y += lineH;
+  });
+  const a = document.createElement("a");
+  a.href = canvas.toDataURL("image/png");
+  a.download = `resultats-${club.toLowerCase().replace(/\s+/g, "-")}.png`;
+  a.click();
+}
+
+/* ---------- chat (item ③ — interview showcase, not the adoption engine) ---------- */
 
 type Vendor = "anthropic" | "google";
-
 interface Usage {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
   cacheWriteTokens: number;
 }
-interface Cost {
-  usd: number;
-  usdPerThousand: number;
-}
-interface Trace {
-  name: string;
-  input: Record<string, unknown>;
-}
 interface Meta {
   model: string;
   usage: Usage;
-  cost: Cost;
-  toolCalls: Trace[];
+  cost: { usd: number; usdPerThousand: number };
+  toolCalls: { name: string; input: Record<string, unknown> }[];
 }
 interface Message {
   role: "user" | "assistant";
@@ -30,17 +271,10 @@ interface Message {
   meta?: Meta;
 }
 
-const SUGGESTIONS = [
-  "Quand joue l'équipe 1 ?",
-  "Les prochains matchs du club ce week-end ?",
-  "Classement des seniors ?",
-  "Où joue l'U18 au prochain match ?",
-];
+const SUGGESTIONS = ["Quand joue l'équipe 1 ?", "Classement des seniors ?", "Résultats du week-end ?"];
 
-/** Turn bare URLs in assistant text into links. */
 function linkify(text: string) {
-  const parts = text.split(/(https?:\/\/[^\s)]+)/g);
-  return parts.map((part, i) =>
+  return text.split(/(https?:\/\/[^\s)]+)/g).map((part, i) =>
     /^https?:\/\//.test(part) ? (
       <a key={i} href={part} target="_blank" rel="noreferrer noopener">
         {part}
@@ -51,13 +285,9 @@ function linkify(text: string) {
   );
 }
 
-function fmtUsd(v: number): string {
-  if (v === 0) return "$0";
-  if (v < 0.01) return `$${v.toFixed(4)}`;
-  return `$${v.toFixed(3)}`;
-}
+const fmtUsd = (v: number) => (v === 0 ? "$0" : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(3)}`);
 
-export default function Home() {
+function ChatPanel() {
   const [vendor, setVendor] = useState<Vendor>("anthropic");
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -69,50 +299,39 @@ export default function Home() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  async function send(text: string) {
-    const message = text.trim();
-    if (!message || loading) return;
-    setError(null);
-    setInput("");
-    const history = messages.map((m) => ({ role: m.role, text: m.text }));
-    setMessages((prev) => [...prev, { role: "user", text: message }]);
-    setLoading(true);
-
-    try {
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history, vendor }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        setError(data.error ?? "Erreur inattendue.");
-      } else {
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "assistant",
-            text: data.answer,
-            meta: { model: data.model, usage: data.usage, cost: data.cost, toolCalls: data.toolCalls },
-          },
-        ]);
+  const send = useCallback(
+    async (text: string) => {
+      const message = text.trim();
+      if (!message || loading) return;
+      setError(null);
+      setInput("");
+      const history = messages.map((m) => ({ role: m.role, text: m.text }));
+      setMessages((prev) => [...prev, { role: "user", text: message }]);
+      setLoading(true);
+      try {
+        const res = await fetch("/api/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message, history, vendor }),
+        });
+        const data = await res.json();
+        if (!res.ok) setError(data.error ?? "Erreur inattendue.");
+        else
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", text: data.answer, meta: { model: data.model, usage: data.usage, cost: data.cost, toolCalls: data.toolCalls } },
+          ]);
+      } catch {
+        setError("Impossible de contacter le serveur.");
+      } finally {
+        setLoading(false);
       }
-    } catch {
-      setError("Impossible de contacter le serveur.");
-    } finally {
-      setLoading(false);
-    }
-  }
+    },
+    [loading, messages, vendor],
+  );
 
   return (
-    <div className="app">
-      <header className="header">
-        <h1>
-          Assistant <span className="accent">ESVL</span> Basket
-        </h1>
-        <p className="sub">// matchs, résultats & classements · données publiques FFBB</p>
-      </header>
-
+    <div>
       <div className="toolbar">
         <div className="seg" role="group" aria-label="Modèle">
           <button aria-pressed={vendor === "anthropic"} onClick={() => setVendor("anthropic")}>
@@ -135,7 +354,6 @@ export default function Home() {
             ))}
           </div>
         )}
-
         {messages.map((m, i) => (
           <div key={i} className={`msg ${m.role}`}>
             <span className="who">{m.role === "user" ? "vous" : "assistant"}</span>
@@ -143,7 +361,6 @@ export default function Home() {
             {m.meta && <MetaBlock meta={m.meta} />}
           </div>
         ))}
-
         {loading && (
           <div className="msg assistant">
             <span className="who">assistant</span>
@@ -163,21 +380,11 @@ export default function Home() {
           send(input);
         }}
       >
-        <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="Pose ta question (ex. « quand joue l'U18 ? »)"
-          maxLength={500}
-          autoFocus
-        />
+        <input value={input} onChange={(e) => setInput(e.target.value)} placeholder="Pose ta question (ex. « quand joue l'U18 ? »)" maxLength={500} />
         <button type="submit" disabled={loading || !input.trim()}>
           Envoyer
         </button>
       </form>
-
-      <footer className="footer">
-        Assistant non officiel, non affilié à la FFBB. Données publiques FFBB, mises en cache. Projet de démonstration.
-      </footer>
     </div>
   );
 }
@@ -187,8 +394,7 @@ function MetaBlock({ meta }: { meta: Meta }) {
   return (
     <details className="meta">
       <summary>
-        {meta.model} · {totalIn + meta.usage.outputTokens} tokens · {fmtUsd(meta.cost.usd)} ·{" "}
-        {fmtUsd(meta.cost.usdPerThousand)}/1k questions
+        {meta.model} · {totalIn + meta.usage.outputTokens} tokens · {fmtUsd(meta.cost.usd)} · {fmtUsd(meta.cost.usdPerThousand)}/1k
       </summary>
       <div className="chips">
         <span className="chip">
@@ -198,7 +404,7 @@ function MetaBlock({ meta }: { meta: Meta }) {
           out <b>{meta.usage.outputTokens}</b>
         </span>
         <span className="chip">
-          cache read <b>{meta.usage.cacheReadTokens}</b>
+          cache <b>{meta.usage.cacheReadTokens}</b>
         </span>
         <span className="chip">
           outils <b>{meta.toolCalls.length}</b>

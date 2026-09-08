@@ -47,10 +47,16 @@ function resolveOrExplain<T>(
   });
 }
 
-/** Warm (and return) the team catalog. Call once per request; cheap after that. */
-export function warmCatalog(): Promise<Catalog> {
-  return getCatalog();
+/** Warm (and return) the team catalog for a club (default: ESVL). Cheap after the first call. */
+export function warmCatalog(orgId?: string): Promise<Catalog> {
+  return getCatalog(orgId);
 }
+
+// Lower-level helpers used by the weekend-brief and recap builders.
+export { nextMatchForTeam, teamFormInPoule } from "./matches";
+export type { TeamForm } from "./matches";
+export { standingForTeam } from "./standings";
+export { resolveTeam } from "./resolve";
 
 export function listTeams(catalog: Catalog): { season: string; teams: TeamRef[] } {
   return { season: catalog.season.label, teams: catalog.teams.map(ref) };
@@ -65,7 +71,7 @@ export function getSchedule(
   if (!query) {
     return clubNextMatches(catalog, limit).then((data) => ({ status: "ok", data }));
   }
-  return resolveOrExplain(query, catalog, (team) => nextMatchesForTeam(team, limit));
+  return resolveOrExplain(query, catalog, (team) => nextMatchesForTeam(catalog, team, limit));
 }
 
 /** Latest results. `query` null → whole club. */
@@ -77,10 +83,10 @@ export function getResults(
   if (!query) {
     return clubLastResults(catalog, limit).then((data) => ({ status: "ok", data }));
   }
-  return resolveOrExplain(query, catalog, (team) => lastResultsForTeam(team, limit));
+  return resolveOrExplain(query, catalog, (team) => lastResultsForTeam(catalog, team, limit));
 }
 
 /** League standing for a team's poule. Requires a team (standings are per-poule). */
 export function getStanding(catalog: Catalog, query: string): Promise<Scoped<Standing>> {
-  return resolveOrExplain(query, catalog, (team) => standingForTeam(team));
+  return resolveOrExplain(query, catalog, (team) => standingForTeam(catalog, team));
 }

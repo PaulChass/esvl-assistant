@@ -24,6 +24,8 @@ export interface Team {
 }
 
 export interface Catalog {
+  orgId: string;
+  clubName: string;
   season: Season;
   teams: Team[];
   fetchedAt: number;
@@ -40,8 +42,9 @@ export interface Match {
   played: boolean;
   postponed: boolean;
   round: string | null;
-  team: string; // which ESVL team (competition label)
+  team: string; // which club team (competition label)
   opponent: string;
+  opponentOrgId: string;
   home: boolean;
   venue: string | null;
   venueCity: string | null;
@@ -53,6 +56,7 @@ export interface Match {
 
 export interface StandingRow {
   rank: number;
+  orgId: string;
   team: string;
   played: number;
   won: number;

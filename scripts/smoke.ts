@@ -1,6 +1,8 @@
 /* Live smoke test for the FFBB data layer. Run: npx tsx scripts/smoke.ts (no API key needed). */
 import { warmCatalog, listTeams, getSchedule, getResults, getStanding } from "@/lib/ffbb";
 import { resolveTeam } from "@/lib/ffbb/resolve";
+import { buildWeekend } from "@/lib/brief/weekend";
+import { buildRecap } from "@/lib/brief/recap";
 
 function j(v: unknown) {
   return JSON.stringify(v, null, 2);
@@ -34,6 +36,25 @@ async function main() {
   console.log("\n--- club results ---");
   const res = await getResults(catalog, null, 3);
   console.log(res.status, "count:", res.status === "ok" ? res.data.length : "-");
+
+  console.log("\n--- weekend brief (① / ①bis) ---");
+  const weekend = await buildWeekend(catalog);
+  console.log(`club=${weekend.club} · fixtures=${weekend.fixtures.length}`);
+  if (weekend.fixtures[0]) {
+    console.log("first fixture row:", JSON.stringify({
+      team: weekend.fixtures[0].team,
+      homeAway: weekend.fixtures[0].homeAway,
+      opponent: weekend.fixtures[0].opponent,
+      when: `${weekend.fixtures[0].dateLabel} ${weekend.fixtures[0].timeLabel ?? ""}`,
+      thisWeekend: weekend.fixtures[0].thisWeekend,
+    }));
+    console.log("\nWhatsApp message:\n" + weekend.fixtures[0].message);
+  }
+
+  console.log("\n--- sunday recap (②) ---");
+  const recap = await buildRecap(catalog);
+  console.log(`hasResults=${recap.hasResults}`);
+  console.log(recap.post);
 }
 
 main().catch((e) => {

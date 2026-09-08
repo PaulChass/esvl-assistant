@@ -25,14 +25,14 @@ export async function getActiveSeason(): Promise<Season> {
  * kept warm so team resolution is a token-free local lookup. Personal fields on the
  * engagement (correspondent email/phone/address) are never requested.
  */
-export async function getCatalog(): Promise<Catalog> {
+export async function getCatalog(orgId: string = ESVL.orgId): Promise<Catalog> {
   const season = await getActiveSeason();
 
   const raw = await directusGet<RawEngagement[]>(
     `/items/ffbbserver_engagements` +
-      `?filter[idOrganisme][_eq]=${ESVL.orgId}` +
+      `?filter[idOrganisme][_eq]=${orgId}` +
       `&filter[idCompetition][saison][_eq]=${season.id}` +
-      `&fields=id,numeroEquipe,idPoule,idCompetition.id,idCompetition.nom,idCompetition.code,` +
+      `&fields=id,numeroEquipe,idPoule,nom,idCompetition.id,idCompetition.nom,idCompetition.code,` +
       `idCompetition.sexe,idCompetition.saison,idCompetition.idCompetitionPere` +
       `&limit=200`,
     TTL.catalog,
@@ -43,5 +43,7 @@ export async function getCatalog(): Promise<Catalog> {
     .filter((t): t is Team => t !== null)
     .sort((a, b) => a.label.localeCompare(b.label, "fr"));
 
-  return { season, teams, fetchedAt: Date.now() };
+  const clubName = raw?.find((e) => e.nom)?.nom ?? (orgId === ESVL.orgId ? ESVL.name : `Club ${orgId}`);
+
+  return { orgId, clubName, season, teams, fetchedAt: Date.now() };
 }

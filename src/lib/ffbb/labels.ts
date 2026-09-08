@@ -14,6 +14,7 @@ interface RawEngagement {
   id: string;
   numeroEquipe: string;
   idPoule: string;
+  nom?: string | null; // club display name (same across a club's engagements)
   idCompetition: RawCompetition | null;
 }
 
