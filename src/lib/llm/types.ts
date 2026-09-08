@@ -20,6 +20,9 @@ export interface LlmToolCall {
   id: string;
   name: string;
   input: Record<string, unknown>;
+  /** Provider-specific opaque token that must be echoed back on replay
+   *  (Gemini 3.x "thought signature"). Unused by Anthropic. */
+  signature?: string;
 }
 
 export interface LlmToolResult {

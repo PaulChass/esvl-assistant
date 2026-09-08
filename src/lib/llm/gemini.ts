@@ -31,7 +31,10 @@ function toContents(turns: LlmTurn[]): Content[] {
       const parts: Part[] = [];
       if (turn.text) parts.push({ text: turn.text });
       for (const c of turn.toolCalls) {
-        parts.push({ functionCall: { id: c.id, name: c.name, args: c.input } });
+        const part: Part = { functionCall: { id: c.id, name: c.name, args: c.input } };
+        // Gemini 3.x requires the thought signature to be echoed back with the call.
+        if (c.signature) part.thoughtSignature = c.signature;
+        parts.push(part);
       }
       contents.push({ role: "model", parts });
     } else {
@@ -86,19 +89,29 @@ export function geminiProvider(model: string): LlmProvider {
         },
       });
 
-      const calls = res.functionCalls ?? [];
-      const toolCalls: LlmToolCall[] = calls.map((c, i) => ({
-        id: c.id ?? `${c.name}-${i}`,
-        name: c.name ?? "",
-        input: (c.args ?? {}) as Record<string, unknown>,
-      }));
+      // Read parts directly (not res.functionCalls / res.text) so we can capture the
+      // thoughtSignature that Gemini 3.x attaches to each functionCall part.
+      const parts = res.candidates?.[0]?.content?.parts ?? [];
+      let text = "";
+      const toolCalls: LlmToolCall[] = [];
+      for (const p of parts) {
+        if (typeof p.text === "string") text += p.text;
+        if (p.functionCall) {
+          toolCalls.push({
+            id: p.functionCall.id ?? `${p.functionCall.name ?? "fn"}-${toolCalls.length}`,
+            name: p.functionCall.name ?? "",
+            input: (p.functionCall.args ?? {}) as Record<string, unknown>,
+            signature: p.thoughtSignature ?? undefined,
+          });
+        }
+      }
 
       const um = res.usageMetadata;
       // Gemini's promptTokenCount INCLUDES cached tokens; Anthropic's input_tokens excludes
       // them. Normalize to "uncached input" + "cache read" so cost accounting is uniform.
       const cached = um?.cachedContentTokenCount ?? 0;
       return {
-        text: res.text ?? "",
+        text,
         toolCalls,
         usage: {
           inputTokens: Math.max(0, (um?.promptTokenCount ?? 0) - cached),

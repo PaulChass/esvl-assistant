@@ -32,7 +32,7 @@ export const ESVL = {
 export const MODEL_DEFAULTS = {
   vendor: (process.env.ESVL_VENDOR as "anthropic" | "google" | undefined) ?? "anthropic",
   anthropic: process.env.ESVL_MODEL_ANTHROPIC ?? "claude-haiku-4-5",
-  google: process.env.ESVL_MODEL_GOOGLE ?? "gemini-2.5-flash",
+  google: process.env.ESVL_MODEL_GOOGLE ?? "gemini-3.6-flash",
 } as const;
 
 /** Cache TTLs (ms). FFBB public data changes on the order of minutes-to-days. */
