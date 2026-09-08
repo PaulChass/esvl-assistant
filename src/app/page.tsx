@@ -24,6 +24,23 @@ const Cal = () => (
     <path d="M3 9.5h18M8 2.5v4M16 2.5v4" />
   </svg>
 );
+const Clock = () => (
+  <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 7v5l3.5 2" />
+  </svg>
+);
+
+const DOW = ["dim", "lun", "mar", "mer", "jeu", "ven", "sam"];
+const MON = ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"];
+function dateParts(iso: string | null): { dow: string; day: number; mon: string } | null {
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (!m) return null;
+  const y = +m[1];
+  const mo = +m[2];
+  const d = +m[3];
+  return { dow: DOW[new Date(Date.UTC(y, mo - 1, d)).getUTCDay()], day: d, mon: MON[mo - 1] };
+}
 const Pin = () => (
   <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinejoin="round" aria-hidden="true">
     <path d="M12 21s7-6.3 7-11a7 7 0 1 0-14 0c0 4.7 7 11 7 11z" />
@@ -84,7 +101,7 @@ export default function Home() {
           <h1>
             Assistant <span className="accent">ESVL</span> Basket
           </h1>
-          <p className="sub">// brief du week-end · résultats · assistant</p>
+          <p className="sub">Les matchs du week-end, prêts à partager.</p>
         </div>
       </header>
 
@@ -165,6 +182,7 @@ function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const home = fx.homeAway === "domicile";
+  const dp = dateParts(fx.dateISO);
 
   const copy = async () => {
     ping("copy", org, fx.code);
@@ -179,65 +197,80 @@ function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
 
   return (
     <article className={`fixture${fx.thisWeekend ? " soon" : ""}`}>
-      <div className="fx-head">
-        <span className="fx-team">{fx.team}</span>
-        <span className={`ha ${home ? "home" : "away"}`}>{home ? "domicile" : "extérieur"}</span>
-        {fx.thisWeekend && <span className="fx-soon">● ce week-end</span>}
-      </div>
-
-      <h3 className="fx-opp">
-        <span className="lead-in">vs </span>
-        {fx.opponent}
-      </h3>
-
-      <div className="fx-meta">
-        {fx.dateLabel && (
-          <span className="meta-chip">
-            <Cal />
-            {fx.dateLabel}
-            {fx.timeLabel ? ` · ${fx.timeLabel}` : ""}
-          </span>
-        )}
-        {fx.venue && (
-          <span className="meta-chip">
-            <Pin />
-            {fx.mapsUrl ? (
-              <a href={fx.mapsUrl} target="_blank" rel="noreferrer noopener">
-                {fx.venue}
-                {fx.venueCity ? ` (${fx.venueCity})` : ""}
-              </a>
-            ) : (
-              `${fx.venue}${fx.venueCity ? ` (${fx.venueCity})` : ""}`
-            )}
-          </span>
-        )}
-      </div>
-
-      {(fx.clubRank || fx.opponentRank) && (
-        <div className="fx-standings">
-          Classement · l'équipe <b>{fx.clubRank ? `${fx.clubRank}ᵉ` : "n/a"}</b>
-          {fx.opponentRank ? (
-            <>
-              {" · "}
-              {fx.opponent} <b>{fx.opponentRank}ᵉ</b>
-            </>
-          ) : null}
+      {dp && (
+        <div className="datebox" aria-hidden="true">
+          <div className="dow">{dp.dow}</div>
+          <div className="day">{dp.day}</div>
+          <div className="mon">{dp.mon}</div>
         </div>
       )}
 
-      <div className="fx-actions">
-        <button className="btn wa" onClick={() => shareText(fx.message, org, fx.code)}>
-          <WhatsApp /> Partager
-        </button>
-        <button className="btn" onClick={copy}>
-          <Copy /> {copied ? "Copié !" : "Copier"}
-        </button>
-        <button className="btn link" onClick={() => setOpen((o) => !o)}>
-          {open ? "Masquer" : "Voir le message"}
-        </button>
-      </div>
+      <div className="fx-body">
+        <div className="fx-head">
+          <span className="fx-cat">{fx.team}</span>
+          <span className={`ha ${home ? "home" : "away"}`}>{home ? "domicile" : "extérieur"}</span>
+          {fx.thisWeekend && <span className="fx-soon">ce week-end</span>}
+        </div>
 
-      {open && <pre className="msg-pre">{fx.message}</pre>}
+        <h3 className="fx-opp">
+          <span className="lead-in">vs </span>
+          {fx.opponent}
+        </h3>
+
+        <div className="fx-meta">
+          {!dp && fx.dateLabel && (
+            <span className="meta-chip">
+              <Cal />
+              {fx.dateLabel}
+            </span>
+          )}
+          {fx.timeLabel && (
+            <span className="meta-chip">
+              <Clock />
+              {fx.timeLabel}
+            </span>
+          )}
+          {fx.venue && (
+            <span className="meta-chip">
+              <Pin />
+              {fx.mapsUrl ? (
+                <a href={fx.mapsUrl} target="_blank" rel="noreferrer noopener">
+                  {fx.venue}
+                  {fx.venueCity ? ` (${fx.venueCity})` : ""}
+                </a>
+              ) : (
+                `${fx.venue}${fx.venueCity ? ` (${fx.venueCity})` : ""}`
+              )}
+            </span>
+          )}
+        </div>
+
+        {(fx.clubRank || fx.opponentRank) && (
+          <div className="fx-standings">
+            Classement · nous <b>{fx.clubRank ? `${fx.clubRank}ᵉ` : "n/a"}</b>
+            {fx.opponentRank ? (
+              <>
+                {" · eux "}
+                <b>{fx.opponentRank}ᵉ</b>
+              </>
+            ) : null}
+          </div>
+        )}
+
+        <div className="fx-actions">
+          <button className="btn wa" onClick={() => shareText(fx.message, org, fx.code)}>
+            <WhatsApp /> Partager
+          </button>
+          <button className="btn ghost" onClick={copy}>
+            <Copy /> {copied ? "Copié !" : "Copier"}
+          </button>
+          <button className="btn link" onClick={() => setOpen((o) => !o)}>
+            {open ? "Masquer" : "Voir le message"}
+          </button>
+        </div>
+
+        {open && <pre className="msg-pre">{fx.message}</pre>}
+      </div>
     </article>
   );
 }
