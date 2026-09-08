@@ -1,0 +1,29 @@
+{
+  "name": "esvl-assistant",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Natural-language assistant for ES Villeneuve-Loubet Basket, grounded on public FFBB data. An applied-AI portfolio project: agent tool-use + retrieval + LLM cost optimization.",
+  "license": "MIT",
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx src/evals/run.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "@google/genai": "^2.21.0",
+    "next": "^16.3.4",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/node": "^26.5.0",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "dotenv": "^17.4.2",
+    "tsx": "^4.23.13",
+    "typescript": "^7.0.2"
+  }
+}
