@@ -1,8 +1,10 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { outcomeLabel, resultMessage } from "@/lib/brief/format";
 import type { Recap } from "@/lib/brief/recap";
 import type { Weekend, WeekendFixture } from "@/lib/brief/weekend";
+import type { Match } from "@/lib/ffbb";
 
 // Club identity (defaults = ESVL). Override via NEXT_PUBLIC_CLUB_* env vars — see src/config.ts.
 const DEFAULT_ORG = process.env.NEXT_PUBLIC_CLUB_ORG_ID ?? "10135";
@@ -58,6 +60,11 @@ const Copy = () => (
 const Download = () => (
   <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
     <path d="M12 3v12M7 11l5 5 5-5M5 21h14" />
+  </svg>
+);
+const Check = () => (
+  <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M4 12.5l5 5 11-11" />
   </svg>
 );
 
@@ -266,7 +273,6 @@ function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
 function RecapPanel({ org }: { org: string }) {
   const [data, setData] = useState<Recap | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     let alive = true;
@@ -288,45 +294,99 @@ function RecapPanel({ org }: { org: string }) {
   if (!data)
     return (
       <div className="skeletons" aria-busy="true">
-        <div className="sk" style={{ height: 220 }} />
+        <div className="sk" />
+        <div className="sk" />
       </div>
     );
+
+  return (
+    <div>
+      <div className="panel-head recap-head">
+        <div>
+          <div className="club">{data.club}</div>
+          <div className="season">Résultats · {data.season}</div>
+        </div>
+        {data.hasResults && (
+          <div className="recap-agg">
+            <button className="btn link" onClick={() => shareText(data.post, org)}>
+              <WhatsApp /> Tout le récap
+            </button>
+            <button className="icon-btn" aria-label="Télécharger l'image du récap" onClick={() => downloadRecapImage(data.post, data.club)}>
+              <Download />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {data.results.length === 0 ? (
+        <div className="empty">Pas encore de résultats cette saison — rendez-vous après la première journée !</div>
+      ) : (
+        <div className="results">
+          {data.results.map((m, i) => (
+            <ResultCard key={i} match={m} org={org} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ResultCard({ match, org }: { match: Match; org: string }) {
+  const [copied, setCopied] = useState(false);
+  const msg = resultMessage(match);
+  const oc = match.outcome;
 
   const copy = async () => {
     ping("recap_copy", org);
     try {
-      await navigator.clipboard.writeText(data.post);
+      await navigator.clipboard.writeText(msg);
       setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      setTimeout(() => setCopied(false), 1500);
     } catch {
       /* ignore */
     }
   };
 
   return (
-    <div>
-      <div className="panel-head">
-        <div className="club">{data.club}</div>
-        <div className="season">Récap à publier · {data.season}</div>
-      </div>
-      <div className="recap-card">
-        <pre className="msg-pre" style={{ marginTop: 0 }}>
-          {data.post}
-        </pre>
-        <div className="recap-actions">
-          <button className="btn wa" onClick={() => shareText(data.post, org)}>
-            <WhatsApp /> Partager
+    <article className="result">
+      <div className="result-top">
+        <div className="result-team">
+          <span className="fx-cat">{match.team}</span>
+          <span className={`ha ${match.home ? "home" : "away"}`}>{match.home ? "domicile" : "extérieur"}</span>
+        </div>
+        <div className="result-actions">
+          <button className="icon-btn wa" aria-label="Partager sur WhatsApp" onClick={() => shareText(msg, org)}>
+            <WhatsApp />
           </button>
-          <button className="btn" onClick={copy}>
-            <Copy /> {copied ? "Copié !" : "Copier le post"}
-          </button>
-          <button className="btn" onClick={() => downloadRecapImage(data.post, data.club)}>
-            <Download /> Image
+          <button className={`icon-btn${copied ? " done" : ""}`} aria-label={copied ? "Copié" : "Copier"} onClick={copy}>
+            {copied ? <Check /> : <Copy />}
           </button>
         </div>
       </div>
-      {!data.hasResults && <p className="empty">Le visuel et le post se rempliront après la première journée.</p>}
-    </div>
+
+      <h3 className="result-opp">
+        <span className="lead-in">vs </span>
+        {match.opponent}
+      </h3>
+
+      <div className="result-bottom">
+        <div className={`result-score ${oc === "W" ? "win" : oc === "L" ? "loss" : "draw"}`}>
+          {match.score ? (
+            <>
+              {match.score.esvl}
+              <span className="dash">–</span>
+              {match.score.opponent}
+            </>
+          ) : (
+            "—"
+          )}
+        </div>
+        <div className="result-tag">
+          {outcomeLabel(oc)}
+          {match.dateLabel ? ` · ${match.dateLabel}` : ""}
+        </div>
+      </div>
+    </article>
   );
 }
 

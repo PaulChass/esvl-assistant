@@ -199,6 +199,37 @@ body {
 .recap-card { background: var(--surface); border: 1px solid var(--line); border-radius: 20px; padding: 18px; box-shadow: var(--shadow); }
 .recap-actions { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; }
 
+/* results — one card per result */
+.recap-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.recap-agg { display: flex; align-items: center; gap: 6px; flex: none; }
+.recap-agg .btn.link { font-size: 13px; padding: 8px 8px; min-height: 38px; }
+
+.results { display: flex; flex-direction: column; gap: 12px; padding: 12px 0 8px; }
+.result { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 15px 16px; box-shadow: var(--shadow); }
+.result-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.result-team { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.result-actions { display: flex; gap: 6px; flex: none; }
+.result-opp { margin-top: 8px; font-family: var(--display); font-weight: 700; font-size: 18px; line-height: 1.15; }
+.result-opp .lead-in { color: var(--ink-soft); font-weight: 500; }
+.result-bottom { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 6px; }
+.result-score { font-family: var(--display); font-weight: 700; font-size: 27px; font-variant-numeric: tabular-nums; letter-spacing: 0.01em; }
+.result-score .dash { margin: 0 7px; color: var(--ink-soft); font-weight: 500; }
+.result-score.win { color: var(--wa); }
+.result-score.loss { color: #e5484d; }
+.result-score.draw { color: var(--ink-soft); }
+.result-tag { font-family: var(--display); font-weight: 600; font-size: 13px; color: var(--ink-soft); text-align: right; }
+
+.icon-btn {
+  width: 38px; height: 38px; flex: none; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink-soft);
+  cursor: pointer; transition: color 0.12s, border-color 0.12s, transform 0.06s;
+}
+.icon-btn:hover { color: var(--ink); border-color: var(--line-strong); }
+.icon-btn:active { transform: translateY(1px); }
+.icon-btn.wa:hover { color: var(--wa); border-color: color-mix(in srgb, var(--wa) 60%, var(--line)); }
+.icon-btn.done { color: var(--wa); border-color: color-mix(in srgb, var(--wa) 60%, var(--line)); }
+.icon-btn svg { width: 17px; height: 17px; }
+
 /* ---------- chat ---------- */
 .chat-toolbar { display: flex; align-items: center; gap: 12px; padding: 16px 2px 8px; flex-wrap: wrap; }
 .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 11px; overflow: hidden; background: var(--surface-2); }

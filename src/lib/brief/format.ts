@@ -60,6 +60,24 @@ export function fixtureMessage(opts: {
 }
 
 const OUTCOME_EMOJI: Record<"W" | "L" | "D", string> = { W: "🟢", L: "🔴", D: "⚪" };
+const OUTCOME_LABEL: Record<"W" | "L" | "D", string> = { W: "Victoire", L: "Défaite", D: "Match nul" };
+
+export function outcomeLabel(o: "W" | "L" | "D" | null): string {
+  return o ? OUTCOME_LABEL[o] : "Résultat";
+}
+
+/** A single result as a shareable WhatsApp message (one card = one share). */
+export function resultMessage(match: Match): string {
+  const head = match.outcome ? OUTCOME_LABEL[match.outcome] : null;
+  const score = match.score ? `${match.score.esvl}-${match.score.opponent}` : "—";
+  const lines = [
+    `🏀 ${match.team}${head ? ` — ${head}` : ""}`,
+    `${score} vs ${match.opponent} (${match.home ? "à domicile" : "à l'extérieur"})`,
+  ];
+  if (match.dateLabel) lines.push(`📅 ${match.dateLabel}`);
+  lines.push("", SIGNATURE);
+  return lines.join("\n");
+}
 
 /** Build the Sunday recap post from the club's latest results (item ② of the plan). */
 export function recapPost(club: string, results: Match[]): { post: string; hasResults: boolean } {
