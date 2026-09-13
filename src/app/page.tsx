@@ -180,20 +180,8 @@ function WeekendPanel({ org }: { org: string }) {
 
 function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
   const [open, setOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
   const home = fx.homeAway === "domicile";
   const dp = dateParts(fx.dateISO);
-
-  const copy = async () => {
-    ping("copy", org, fx.code);
-    try {
-      await navigator.clipboard.writeText(fx.message);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setOpen(true);
-    }
-  };
 
   return (
     <article className={`fixture${fx.thisWeekend ? " soon" : ""}`}>
@@ -260,9 +248,6 @@ function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
         <div className="fx-actions">
           <button className="btn wa" onClick={() => shareText(fx.message, org, fx.code)}>
             <WhatsApp /> Partager
-          </button>
-          <button className="btn ghost" onClick={copy}>
-            <Copy /> {copied ? "Copié !" : "Copier"}
           </button>
           <button className="btn link" onClick={() => setOpen((o) => !o)}>
             {open ? "Masquer" : "Voir le message"}

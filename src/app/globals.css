@@ -152,7 +152,9 @@ body {
 .fx-standings { margin-top: 9px; font-size: 13.5px; color: var(--ink-soft); }
 .fx-standings b { color: var(--ink); font-weight: 700; }
 
-.fx-actions { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; }
+.fx-actions { display: flex; gap: 8px; margin-top: 15px; flex-wrap: wrap; align-items: center; }
+.fx-actions .btn { font-size: 14px; padding: 9px 15px; min-height: 40px; }
+.fx-actions .btn.link { padding: 9px 8px; }
 
 /* ---------- buttons ---------- */
 .btn {
