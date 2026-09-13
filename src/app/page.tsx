@@ -4,7 +4,9 @@ import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import type { Recap } from "@/lib/brief/recap";
 import type { Weekend, WeekendFixture } from "@/lib/brief/weekend";
 
-const DEFAULT_ORG = "10135"; // ES Villeneuve-Loubet Basket (pilot club)
+// Club identity (defaults = ESVL). Override via NEXT_PUBLIC_CLUB_* env vars — see src/config.ts.
+const DEFAULT_ORG = process.env.NEXT_PUBLIC_CLUB_ORG_ID ?? "10135";
+const CLUB_SHORT = process.env.NEXT_PUBLIC_CLUB_SHORT ?? "ESVL";
 
 /* ---------- icons ---------- */
 const Basketball = () => (
@@ -99,7 +101,7 @@ export default function Home() {
         </span>
         <div>
           <h1>
-            Assistant <span className="accent">ESVL</span> Basket
+            Assistant <span className="accent">{CLUB_SHORT}</span> Basket
           </h1>
           <p className="sub">Le club, match après match.</p>
         </div>

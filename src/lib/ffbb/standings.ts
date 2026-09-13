@@ -1,4 +1,4 @@
-import { ESVL, FFBB_WEB, TTL } from "@/config";
+import { CLUB, clubUrl, FFBB_WEB, TTL } from "@/config";
 import { directusGet } from "./http";
 import type { Catalog, Standing, StandingRow, Team } from "./types";
 import { num } from "./util";
@@ -55,6 +55,6 @@ export async function standingForTeam(catalog: Catalog, team: Team): Promise<Sta
     poule,
     rows,
     esvlRank: rows.find((r) => r.isEsvl)?.rank ?? null,
-    sourceUrl: catalog.orgId === ESVL.orgId ? ESVL.clubUrl : FFBB_WEB,
+    sourceUrl: catalog.orgId === CLUB.orgId && clubUrl ? clubUrl : FFBB_WEB,
   };
 }

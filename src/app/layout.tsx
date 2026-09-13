@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Barlow, Barlow_Semi_Condensed } from "next/font/google";
 import type { ReactNode } from "react";
+import { CLUB } from "@/config";
 import "./globals.css";
 
 const body = Barlow({
@@ -17,9 +18,8 @@ const display = Barlow_Semi_Condensed({
 });
 
 export const metadata: Metadata = {
-  title: "Assistant ESVL Basket",
-  description:
-    "Les matchs, résultats et classements de l'ES Villeneuve-Loubet Basket, prêts à partager. Assistant non officiel, données publiques FFBB.",
+  title: `Assistant ${CLUB.short} Basket`,
+  description: `Les matchs, résultats et classements de ${CLUB.name}, prêts à partager. Assistant non officiel, données publiques FFBB.`,
   robots: { index: false, follow: false },
 };
 

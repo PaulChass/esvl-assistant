@@ -1,4 +1,4 @@
-import { ESVL, TTL } from "@/config";
+import { CLUB, TTL } from "@/config";
 import { directusGet } from "./http";
 import { buildTeam, type RawEngagement } from "./labels";
 import type { Catalog, Season, Team } from "./types";
@@ -25,7 +25,7 @@ export async function getActiveSeason(): Promise<Season> {
  * kept warm so team resolution is a token-free local lookup. Personal fields on the
  * engagement (correspondent email/phone/address) are never requested.
  */
-export async function getCatalog(orgId: string = ESVL.orgId): Promise<Catalog> {
+export async function getCatalog(orgId: string = CLUB.orgId): Promise<Catalog> {
   const season = await getActiveSeason();
 
   const raw = await directusGet<RawEngagement[]>(
@@ -43,7 +43,7 @@ export async function getCatalog(orgId: string = ESVL.orgId): Promise<Catalog> {
     .filter((t): t is Team => t !== null)
     .sort((a, b) => a.label.localeCompare(b.label, "fr"));
 
-  const clubName = raw?.find((e) => e.nom)?.nom ?? (orgId === ESVL.orgId ? ESVL.name : `Club ${orgId}`);
+  const clubName = raw?.find((e) => e.nom)?.nom ?? (orgId === CLUB.orgId ? CLUB.name : `Club ${orgId}`);
 
   return { orgId, clubName, season, teams, fetchedAt: Date.now() };
 }

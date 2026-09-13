@@ -1,85 +1,95 @@
 # ESVL Basket Assistant
 
-A natural-language assistant for an amateur basketball club — **ES Villeneuve-Loubet Basket** — that answers *"when do we play?"*, *"what were the results?"* and *"where are we in the table?"*, grounded on public [FFBB](https://www.ffbb.com/) (French Basketball Federation) data.
+A small, finished assistant for an amateur basketball club — **ES Villeneuve-Loubet Basket** — grounded on public [FFBB](https://www.ffbb.com/) (French Basketball Federation) data. It turns the federation's clunky data into **ready-to-paste WhatsApp messages** for the people who actually run a club.
 
-It's a small, finished, applied-AI project built to demonstrate three things end-to-end:
+It is also a **template**: point it at any FFBB club with one environment variable (see [Run it for your own club](#run-it-for-your-own-club)).
 
-- **Agentic tool use** — a French-language agent that routes fuzzy questions to a handful of typed tools over live federation data.
-- **Grounding, not guessing** — every answer comes from a tool result; the agent disambiguates or says "I don't know" instead of inventing scores and dates.
-- **LLM cost engineering** — layered caching, prompt-cache-friendly context, and moving deterministic work out of the model, with the cost of every answer measured.
+Three surfaces:
 
-It is **provider-agnostic**: the same agent loop runs on **Claude Haiku** or **Gemini Flash** behind one interface, and a benchmark compares them on cost, latency, and correctness.
+- **① Week-end** — for each team, its next fixture (opponent, date/time, gym + itinerary link, both standings, opponent form) as a **one-tap WhatsApp share**.
+- **② Résultats** — the club's latest results as a ready-to-publish post (+ a downloadable image).
+- **③ Assistant** — a natural-language Q&A agent (« quand joue l'U18 ? ») — the applied-AI showcase.
 
-> Unofficial project, **not affiliated with the FFBB or the club**. Built on public data, cached and attributed. Non-commercial.
+Built to demonstrate three things end-to-end: **agentic tool use**, **grounding not guessing** (the agent disambiguates or says "I don't know" instead of inventing), and **LLM cost engineering** (layered caching, prompt-cache-friendly context, deterministic work kept out of the model, with the cost of every answer measured). It is **provider-agnostic** — the same agent runs on **Claude Haiku** or **Gemini Flash** behind one interface.
+
+> Unofficial project, **not affiliated with the FFBB or the club**. Built on public data, cached and attributed. Non-commercial. MIT-licensed.
+
+**Live demo:** [esvl-assistant.vercel.app](https://esvl-assistant.vercel.app)
+
+---
+
+## Run it for your own club
+
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https%3A%2F%2Fgithub.com%2FPaulChass%2Fesvl-assistant&env=ANTHROPIC_API_KEY,NEXT_PUBLIC_CLUB_ORG_ID&envDescription=Anthropic%20API%20key%20(for%20the%20chat%20tab)%20%2B%20your%20FFBB%20club%20org%20id&envLink=https%3A%2F%2Fgithub.com%2FPaulChass%2Fesvl-assistant%23run-it-for-your-own-club)
+
+Only one thing identifies a club: its **FFBB org id**. Teams, the club name, fixtures and standings are all auto-discovered from that id. Find yours:
+
+```bash
+npm run find-club "your club name"
+```
+
+It prints the `NEXT_PUBLIC_CLUB_*` lines to paste into `.env.local` (or your Vercel env). Only `NEXT_PUBLIC_CLUB_ORG_ID` is required; the Week-end and Résultats tabs then work with no API key at all (the Assistant tab needs `ANTHROPIC_API_KEY`).
 
 ---
 
 ## What it does
 
-Ask, in plain French:
+The Week-end and Résultats tabs are deterministic (no LLM). The Assistant tab answers, in plain French:
 
 - « Quand joue l'équipe 1 ? » → next fixture with date, time, gym, opponent, home/away
 - « Les prochains matchs du club ce week-end ? » → upcoming fixtures across every team
-- « Classement des seniors ? » → the poule standing, with the club highlighted (and a follow-up question when "seniors" is ambiguous)
+- « Classement des seniors ? » → the poule standing, club highlighted (and a follow-up when "seniors" is ambiguous)
 - « Y a-t-il une équipe féminine ? » → an honest "no team this season", not a hallucination
 
-The season hasn't started yet as of this writing, so the assistant is designed to come alive as fixtures, results, and standings fill in — and to degrade gracefully when data isn't published.
+It degrades gracefully when data isn't published yet (e.g. standings before the first game).
 
 ---
 
 ## Architecture
 
 ```
-Browser (chat UI, Next.js)
-      │  POST /api/chat  { message, history, vendor }
-      ▼
-Agent loop  (provider-agnostic tool-use)         src/lib/agent
-      │              │
-      ▼              ▼
-LLM provider     FFBB tools                       src/lib/llm, src/lib/agent/tools.ts
- Claude | Gemini   list_teams / get_schedule / get_results / get_standing
-                        │
-                        ▼
-                  FFBB data layer  (own client + cache)   src/lib/ffbb
-                        │
-                        ▼
-                  api.ffbb.com  (Directus + Meilisearch, public)
+Browser — three surfaces (Next.js)          src/app
+   Week-end · Résultats · Assistant
+      │            │            │
+      ▼            ▼            ▼
+ /api/weekend  /api/recap   /api/chat        src/app/api
+      │            │            │
+      │            │            ▼
+      │            │      Agent loop (provider-agnostic tool-use)   src/lib/agent
+      │            │            │
+      ▼            ▼            ▼
+   Brief builders (① ②)   LLM provider + FFBB tools    src/lib/brief, src/lib/llm
+      └────────────┴────────────┘
+                   ▼
+        FFBB data layer — own client + cache           src/lib/ffbb
+                   ▼
+        api.ffbb.com  (Directus, public)
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) for the data layer in detail (endpoints, auth bootstrap, field mapping, risks).
 
 ### The data layer is our own code
 
-FFBB's public data is served by an undocumented Directus API behind `competitions.ffbb.com`. Rather than depend on an unmaintained third-party client, this project ships a **~200-line typed client** (`src/lib/ffbb`) that:
-
-- bootstraps the public read token, sends the headers the API requires, and retries transient failures;
-- exposes exactly four read operations, each returning **trimmed domain objects** (never raw API payloads);
-- resolves fuzzy French team names (« les U15 », « équipe 1 », « féminines ») to a concrete team **in code, with no LLM tokens**;
-- never requests or exposes the personal contact fields the federation stores on a team.
+FFBB's public data is served by an undocumented Directus API behind `competitions.ffbb.com`. Rather than depend on an unmaintained third-party client, this project ships a **~200-line typed client** (`src/lib/ffbb`) that bootstraps the public read token, sends the headers the API requires, retries transient failures, exposes a handful of read operations returning **trimmed domain objects** (never raw payloads), resolves fuzzy French team names **in code with no LLM tokens**, and never requests the personal contact fields the federation stores on a team.
 
 ### Cost engineering is the point
 
-In a chat agent the dominant cost is tokens, so the design treats caching as **cost control**, not just network hygiene:
+In a chat agent the dominant cost is tokens, so caching is treated as **cost control**:
 
-- **Layered TTL cache** (stale-while-revalidate): the team catalog is kept warm for hours, standings/fixtures for ~30 min. One fetch of a poule's matches serves both the "next matches" and "latest results" tools.
-- **Prompt-cache-friendly context**: the stable instructions + team catalog live in a single cacheable system head; the only volatile bit (today's date) is a separate block, so Claude's prompt cache is reused across turns.
-- **Trimmed tool outputs**: tools return only `{ date, opponent, venue, score, W/L, rank }` — never dumped Directus objects.
-- **Deterministic work in code, not the model**: date parsing, win/loss, home/away, and string→number coercion happen in TypeScript (token-free and error-free), so the model only has to phrase the answer.
-
-Every answer reports its own token usage and cost in the UI.
+- **Layered TTL cache** (stale-while-revalidate): the team catalog stays warm for hours, standings/fixtures ~30 min. One fetch of a poule's matches serves both the "next matches" and "latest results" tools.
+- **Prompt-cache-friendly context**: stable instructions + team catalog in one cacheable system head; the only volatile bit (today's date) is a separate block.
+- **Trimmed tool outputs** and **deterministic work in code** (dates, W/L, home/away, coercion) so the model only phrases the answer.
 
 ### Provider-agnostic + benchmark
 
-`src/lib/llm` defines one `LlmProvider` interface with two implementations (Anthropic, Google). The agent loop is written entirely against the interface, so switching vendors is a config change. `npm run eval` runs a behavioural eval set over live data and prints a cost/latency/correctness table per provider:
+`src/lib/llm` defines one `LlmProvider` interface with two implementations (Anthropic, Google); the agent loop is written entirely against it. `npm run eval` runs a behavioural eval over live data and writes `BENCHMARK.md`:
 
-```
-| Provider  | Model                 | Pass | Avg latency | Avg cost/answer | Cost / 1k answers |
-|-----------|-----------------------|------|-------------|-----------------|-------------------|
-| anthropic | claude-haiku-4-5      |  …   |     … ms    |      $…         |        $…         |
-| google    | gemini-2.5-flash      |  …   |     … ms    |      $…         |        $…         |
-```
+| Provider  | Model              | Pass | Avg latency | Avg cost/answer | Cost / 1k answers |
+|-----------|--------------------|------|-------------|-----------------|-------------------|
+| anthropic | `claude-haiku-4-5` | 8/8  | 2 975 ms    | $0.0044         | $4.35             |
+| google    | `gemini-3.6-flash` | —    | —           | —               | —                 |
 
-Run it with your own keys to populate the numbers (it writes `BENCHMARK.md`). The eval grades **behaviour** — did the agent route to the right tool, disambiguate when needed, and refuse to invent — because the underlying data is live.
+(Anthropic measured live; the Gemini provider is implemented and 3.x-ready — run it with a Gemini key to fill its row.) The eval grades **behaviour** — right tool, disambiguation, no invention — because the data is live.
 
 ---
 
@@ -89,26 +99,20 @@ Requires Node 20+.
 
 ```bash
 npm install
-cp .env.example .env.local   # then add your key(s)
-npm run dev                  # http://localhost:3000
-```
-
-Set at least one provider key in `.env.local`:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...     # default provider (Claude Haiku)
-GEMINI_API_KEY=...               # optional second provider (Gemini Flash)
+cp .env.example .env.local     # add your key(s) + your club org id
+npm run dev                    # http://localhost:3000
 ```
 
 Other commands:
 
 ```bash
-npm run typecheck            # tsc --noEmit
-npm run eval                 # benchmark configured providers → BENCHMARK.md
-npx tsx scripts/smoke.ts     # exercise the FFBB data layer (no key needed)
+npm run find-club "<name>"     # find a club's FFBB org id + env config
+npm run typecheck              # tsc --noEmit
+npm run eval                   # benchmark configured providers → BENCHMARK.md
+npx tsx scripts/smoke.ts       # exercise the FFBB data layer (no key needed)
 ```
 
-Deploy target is Vercel (the cache is per-instance in-memory; a shared KV store is a documented upgrade path).
+Deploys to Vercel with zero config. The cache is per-instance in-memory; swapping it for Vercel KV / Upstash behind the same interface makes it shared across cold starts. Optional `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` enable "Share"-click metrics (no-op when unset).
 
 ---
 
@@ -120,12 +124,16 @@ TypeScript · Next.js (App Router) · `@anthropic-ai/sdk` · `@google/genai` · 
 
 ## Data, ethics & limitations
 
-- **Unofficial and non-affiliated.** The assistant is a personal project; it is not endorsed by the FFBB or the club, and it is served with `noindex` so it is never mistaken for an official source.
-- **Public data, minimal footprint.** It reads only public results/fixtures/standings, caches hard to keep request volume low, and attributes the FFBB as the source. Members' personal data is never touched.
-- **Non-commercial.** The FFBB's data is covered by database rights and its official results partner monetizes it; this project stays a free demonstration.
+- **Unofficial and non-affiliated.** Not endorsed by the FFBB or any club; served with `noindex` so it is never mistaken for an official source.
+- **Public data, minimal footprint.** Reads only public results/fixtures/standings, caches hard, attributes the FFBB. Members' personal data is never touched.
+- **Non-commercial.** The FFBB's data is covered by database rights and monetized through official partners; this stays a free demonstration. Self-hosting for your own club is fine — keep it non-commercial and attributed.
 - **The backend is undocumented** and can change or block without notice. The client fails gracefully and surfaces typed errors.
 
 ---
+
+## Contributing
+
+Forks and PRs are welcome — especially from other clubs. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the project layout, how to run things, and how to add a tool. Licensed under [MIT](LICENSE).
 
 ## Why this exists
 

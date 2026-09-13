@@ -1,5 +1,5 @@
 import type { NextRequest } from "next/server";
-import { ESVL } from "@/config";
+import { CLUB } from "@/config";
 import { buildWeekend } from "@/lib/brief/weekend";
 import { warmCatalog } from "@/lib/ffbb";
 
@@ -8,7 +8,7 @@ export const maxDuration = 30;
 
 function orgOf(req: NextRequest): string {
   const raw = req.nextUrl.searchParams.get("org") ?? "";
-  return /^[0-9]{1,15}$/.test(raw) ? raw : ESVL.orgId;
+  return /^[0-9]{1,15}$/.test(raw) ? raw : CLUB.orgId;
 }
 
 export async function GET(req: NextRequest) {
