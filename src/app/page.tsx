@@ -311,7 +311,7 @@ function RecapPanel({ org }: { org: string }) {
             <button className="btn link" onClick={() => shareText(data.post, org)}>
               <WhatsApp /> Tout le récap
             </button>
-            <button className="icon-btn" aria-label="Télécharger l'image du récap" onClick={() => downloadRecapImage(data.post, data.club)}>
+            <button className="icon-btn" aria-label="Télécharger l'image du récap" onClick={() => downloadRecapImage(data.club, data.results)}>
               <Download />
             </button>
           </div>
@@ -390,31 +390,96 @@ function ResultCard({ match, org }: { match: Match; org: string }) {
   );
 }
 
-function downloadRecapImage(post: string, club: string) {
-  const lines = post.split("\n");
-  const pad = 56;
-  const lineH = 46;
-  const width = 1080;
+/** Render the club's results as a clean, shareable PNG (for Facebook / Instagram). */
+async function downloadRecapImage(club: string, results: Match[]) {
+  try {
+    await document.fonts.ready;
+  } catch {
+    /* fonts may be unavailable — canvas falls back to system fonts */
+  }
+  const cs = getComputedStyle(document.documentElement);
+  const display = cs.getPropertyValue("--font-display").trim() || "sans-serif";
+  const bodyFont = cs.getPropertyValue("--font-body").trim() || "sans-serif";
+
+  const W = 1080;
+  const pad = 72;
+  const headerH = 220;
+  const rowH = 150;
+  const footerH = 104;
+  const H = headerH + Math.max(1, results.length) * rowH + footerH;
+
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = pad * 2 + lines.length * lineH;
+  canvas.width = W;
+  canvas.height = H;
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
-  ctx.fillStyle = "#0b0e12";
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#14110c";
+  ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = "#ff7a2f";
+  ctx.fillRect(0, 0, W, 14);
+
+  const trunc = (t: string, max: number) => {
+    if (ctx.measureText(t).width <= max) return t;
+    let s = t;
+    while (s.length > 1 && ctx.measureText(s + "…").width > max) s = s.slice(0, -1);
+    return s + "…";
+  };
+
+  // header
+  ctx.textAlign = "left";
+  ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#ff8a3a";
-  ctx.fillRect(0, 0, width, 12);
-  ctx.textBaseline = "top";
-  let y = pad;
-  lines.forEach((ln, i) => {
-    ctx.font = i === 0 ? '600 42px "IBM Plex Mono", monospace' : '400 30px "IBM Plex Mono", monospace';
-    ctx.fillStyle = i === 0 ? "#ff8a3a" : "#e7ecf2";
-    ctx.fillText(ln, pad, y);
-    y += lineH;
-  });
+  ctx.font = `700 64px ${display}`;
+  ctx.fillText("RÉSULTATS", pad, 122);
+  ctx.fillStyle = "#eee7db";
+  ctx.font = `600 34px ${display}`;
+  ctx.fillText(trunc(club.toUpperCase(), W - pad * 2), pad, 172);
+
+  const scoreW = 240;
+  const textMax = W - pad * 2 - scoreW;
+  let y = headerH;
+  for (const m of results) {
+    ctx.strokeStyle = "rgba(255,255,255,0.09)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, y);
+    ctx.lineTo(W - pad, y);
+    ctx.stroke();
+
+    const cy = y + rowH / 2;
+    const color = m.outcome === "W" ? "#3fd968" : m.outcome === "L" ? "#ff5c60" : "#a99e8d";
+
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillStyle = "#eee7db";
+    ctx.font = `600 36px ${display}`;
+    ctx.fillText(trunc(m.team, textMax), pad, cy - 27);
+    ctx.fillStyle = "#9a9081";
+    ctx.font = `400 30px ${bodyFont}`;
+    ctx.fillText(trunc(`vs ${m.opponent} · ${m.home ? "domicile" : "extérieur"}`, textMax), pad, cy + 24);
+
+    ctx.textAlign = "right";
+    ctx.fillStyle = color;
+    ctx.font = `700 60px ${display}`;
+    ctx.fillText(m.score ? `${m.score.esvl} – ${m.score.opponent}` : "—", W - pad, cy);
+    y += rowH;
+  }
+
+  ctx.strokeStyle = "rgba(255,255,255,0.09)";
+  ctx.beginPath();
+  ctx.moveTo(pad, y);
+  ctx.lineTo(W - pad, y);
+  ctx.stroke();
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillStyle = "#6f675b";
+  ctx.font = `500 26px ${bodyFont}`;
+  ctx.fillText("Données FFBB · non officiel", pad, y + footerH / 2);
+
   const a = document.createElement("a");
   a.href = canvas.toDataURL("image/png");
-  a.download = `resultats-${club.toLowerCase().replace(/\s+/g, "-")}.png`;
+  a.download = `resultats-${club.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "")}.png`;
   a.click();
 }
 
