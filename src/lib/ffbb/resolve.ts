@@ -1,5 +1,5 @@
 import type { Gender, Team } from "./types";
-import { normalize } from "./util";
+import { levelRank, normalize } from "./util";
 
 export type ResolveResult =
   | { kind: "match"; team: Team }
@@ -69,16 +69,6 @@ function parseIntent(query: string, teams: Team[]): Intent {
   if (intent.teamNumber && !intent.category && !intent.codes.length) intent.category = "SE";
 
   return intent;
-}
-
-/** Lower = higher division. Used to order same-category teams ("équipe 1" = top level). */
-function levelRank(label: string): number {
-  const l = normalize(label);
-  if (l.includes("national")) return 1;
-  if (l.includes("pre regional")) return 3;
-  if (l.includes("regional")) return 2;
-  if (l.includes("departemental")) return 4;
-  return 5;
 }
 
 function score(team: Team, intent: Intent): number {

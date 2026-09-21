@@ -17,6 +17,21 @@ export function normalize(s: string): string {
     .trim();
 }
 
+/**
+ * Division level rank, lower = higher level (Nationale > Régionale > Pré-régionale >
+ * Départementale). Derived from the competition label so it self-updates on promotion/
+ * relegation — never hardcode which team is "équipe 1". "pré régionale" is checked before
+ * "régionale" because it also contains the substring "regional".
+ */
+export function levelRank(label: string): number {
+  const l = normalize(label);
+  if (l.includes("national")) return 1;
+  if (l.includes("pre regional")) return 3;
+  if (l.includes("regional")) return 2;
+  if (l.includes("departemental")) return 4;
+  return 5;
+}
+
 const WEEKDAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
 const MONTHS = [
   "janv.", "févr.", "mars", "avr.", "mai", "juin",

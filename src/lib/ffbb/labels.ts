@@ -1,5 +1,5 @@
 import type { Gender, Team } from "./types";
-import { normalize } from "./util";
+import { levelRank, normalize } from "./util";
 
 interface RawCompetition {
   id: string;
@@ -53,9 +53,32 @@ export function buildTeam(e: RawEngagement): Team | null {
 
 export type { RawEngagement };
 
-/** One compact catalog line for the (cacheable) system-prompt head. */
-export function teamCatalogLine(t: Team): string {
-  const g = t.gender === "F" ? "féminin" : t.gender === "M" ? "masculin" : "mixte";
-  const cat = t.category === "SE" ? "seniors" : t.category;
-  return `- ${t.label} — code ${t.code}, ${cat} ${g}`;
+/**
+ * Compact catalog lines for the (cacheable) system-prompt head. DERIVES the
+ * "équipe 1 (fanion) / équipe 2…" labels from the live division hierarchy (via levelRank),
+ * so the model knows which senior team is the first team and stops guessing. Never hardcoded
+ * → self-updates on promotion/relegation.
+ */
+export function buildCatalogLines(teams: Team[]): string[] {
+  // Rank senior (SE) teams within each gender by division level → équipe 1, 2, …
+  const rankByEngagement = new Map<string, number>();
+  const seniorsByGender = new Map<Gender, Team[]>();
+  for (const t of teams) {
+    if (t.category !== "SE") continue;
+    const arr = seniorsByGender.get(t.gender) ?? [];
+    arr.push(t);
+    seniorsByGender.set(t.gender, arr);
+  }
+  for (const arr of seniorsByGender.values()) {
+    arr.sort((a, b) => levelRank(a.label) - levelRank(b.label));
+    arr.forEach((t, i) => rankByEngagement.set(t.engagementId, i + 1));
+  }
+
+  return teams.map((t) => {
+    const g = t.gender === "F" ? "féminin" : t.gender === "M" ? "masculin" : "mixte";
+    const cat = t.category === "SE" ? "seniors" : t.category;
+    const n = rankByEngagement.get(t.engagementId);
+    const rank = n ? ` · équipe ${n}${n === 1 ? " (équipe fanion)" : ""}` : "";
+    return `- ${t.label} — code ${t.code}, ${cat} ${g}${rank}`;
+  });
 }

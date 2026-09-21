@@ -3,6 +3,7 @@ import { warmCatalog, listTeams, getSchedule, getResults, getStanding } from "@/
 import { resolveTeam } from "@/lib/ffbb/resolve";
 import { buildWeekend } from "@/lib/brief/weekend";
 import { buildRecap } from "@/lib/brief/recap";
+import { buildCatalogLines } from "@/lib/ffbb/labels";
 
 function j(v: unknown) {
   return JSON.stringify(v, null, 2);
@@ -12,6 +13,7 @@ async function main() {
   const catalog = await warmCatalog();
   console.log("SEASON:", catalog.season.label, `(${catalog.season.id})`);
   console.log("TEAMS:", j(listTeams(catalog).teams));
+  console.log("\n--- catalog lines (system prompt) ---\n" + buildCatalogLines(catalog.teams).join("\n"));
 
   const queries = ["les seniors", "u18", "u21", "équipe 1", "féminines", "pré régionale", "rm3"];
   console.log("\n--- resolveTeam ---");

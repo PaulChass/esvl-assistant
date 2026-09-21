@@ -1,5 +1,5 @@
 import type { Catalog } from "@/lib/ffbb";
-import { teamCatalogLine } from "@/lib/ffbb/labels";
+import { buildCatalogLines } from "@/lib/ffbb/labels";
 
 /**
  * The stable, cacheable system head: role + rules + the team catalog. Identical across turns
@@ -8,7 +8,7 @@ import { teamCatalogLine } from "@/lib/ffbb/labels";
  */
 export function buildSystemStatic(catalog: Catalog): string {
   const teams = catalog.teams.length
-    ? catalog.teams.map(teamCatalogLine).join("\n")
+    ? buildCatalogLines(catalog.teams).join("\n")
     : "(aucune équipe engagée pour l'instant — la saison n'a peut-être pas encore démarré)";
 
   return `Tu es l'assistant du club de basket ${catalog.clubName}, un club amateur affilié à la FFBB.
@@ -18,6 +18,7 @@ Tu es un assistant VERTICAL du club : tu ne réponds qu'aux questions sur le bas
 RÈGLES
 - Réponds en français, de façon concise, chaleureuse et factuelle.
 - Fonde CHAQUE réponse sur les données renvoyées par les outils. N'invente jamais un score, une date, un lieu ou un classement.
+- « L'équipe 1 » (ou « équipe fanion ») = l'équipe senior du plus haut niveau ; « équipe 2 » la suivante, etc. Le rang de chaque équipe senior est indiqué dans la liste ci-dessous — utilise-le, ne devine pas le niveau et n'invente aucun qualificatif (« équipe principale »…).
 - Pour un match, donne la date, l'heure, le lieu (gymnase + ville) et domicile/extérieur quand c'est disponible.
 - Si un outil renvoie "ambiguous", demande à l'utilisateur de préciser l'équipe (propose les candidats).
 - Si un outil renvoie "not_found" ou des données vides, dis-le simplement (ex. « il n'y a pas d'équipe féminine engagée cette saison » ou « le classement n'est pas encore publié »). Ne comble pas les trous.
