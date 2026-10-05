@@ -116,7 +116,7 @@ export default function Home() {
 
       <nav className="tabs" role="tablist" aria-label="Sections">
         <button className="tab" role="tab" aria-selected={tab === "weekend"} onClick={() => setTab("weekend")}>
-          Week-end
+          Matchs
         </button>
         <button className="tab" role="tab" aria-selected={tab === "recap"} onClick={() => setTab("recap")}>
           Résultats
@@ -193,7 +193,7 @@ function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
   const dp = dateParts(fx.dateISO);
 
   return (
-    <article className={`fixture${fx.thisWeekend ? " soon" : ""}`}>
+    <article className={`fixture${fx.isToday ? " today" : ""}`}>
       {dp && (
         <div className="datebox" aria-hidden="true">
           <div className="dow">{dp.dow}</div>
@@ -206,7 +206,7 @@ function FixtureRow({ fx, org }: { fx: WeekendFixture; org: string }) {
         <div className="fx-head">
           <span className="fx-cat">{fx.team}</span>
           <span className={`ha ${home ? "home" : "away"}`}>{home ? "domicile" : "extérieur"}</span>
-          {fx.thisWeekend && <span className="fx-soon">ce week-end</span>}
+          {fx.isToday && <span className="fx-today">aujourd&apos;hui</span>}
         </div>
 
         <h3 className="fx-opp">

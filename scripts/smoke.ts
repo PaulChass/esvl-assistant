@@ -48,7 +48,7 @@ async function main() {
       homeAway: weekend.fixtures[0].homeAway,
       opponent: weekend.fixtures[0].opponent,
       when: `${weekend.fixtures[0].dateLabel} ${weekend.fixtures[0].timeLabel ?? ""}`,
-      thisWeekend: weekend.fixtures[0].thisWeekend,
+      isToday: weekend.fixtures[0].isToday,
     }));
     console.log("\nWhatsApp message:\n" + weekend.fixtures[0].message);
   }

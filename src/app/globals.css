@@ -118,7 +118,7 @@ body {
   transition: transform 0.12s ease, box-shadow 0.12s ease;
 }
 .fixture:hover { transform: translateY(-2px); box-shadow: 0 4px 8px rgba(27,23,18,0.06), 0 18px 40px rgba(27,23,18,0.12); }
-.fixture.soon { border-color: color-mix(in srgb, var(--orange) 40%, var(--line)); }
+.fixture.today { border-color: color-mix(in srgb, var(--orange) 40%, var(--line)); }
 
 /* date block */
 .datebox {
@@ -126,7 +126,7 @@ body {
   background: var(--surface-2); border: 1px solid var(--line);
   text-align: center; align-self: flex-start;
 }
-.fixture.soon .datebox { background: var(--orange-tint); border-color: color-mix(in srgb, var(--orange) 35%, var(--line)); }
+.fixture.today .datebox { background: var(--orange-tint); border-color: color-mix(in srgb, var(--orange) 35%, var(--line)); }
 .datebox .dow { font-family: var(--display); font-weight: 600; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); padding-top: 8px; }
 .datebox .day { font-family: var(--display); font-weight: 700; font-size: 28px; line-height: 1; color: var(--ink); }
 .datebox .mon { font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-soft); padding-bottom: 8px; margin-top: 2px; }
@@ -138,7 +138,7 @@ body {
 .ha { display: inline-flex; align-items: center; font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; text-transform: uppercase; letter-spacing: 0.05em; }
 .ha.home { color: var(--orange); background: var(--orange-tint); }
 .ha.away { color: var(--ink-soft); background: var(--surface-2); }
-.fx-soon { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 0.05em; }
+.fx-today { margin-left: auto; font-size: 11px; font-weight: 700; color: var(--orange); text-transform: uppercase; letter-spacing: 0.05em; }
 
 .fx-opp { margin: 7px 0 0; font-family: var(--display); font-weight: 700; font-size: 21px; line-height: 1.12; letter-spacing: -0.01em; }
 .fx-opp .lead-in { color: var(--ink-soft); font-weight: 500; }

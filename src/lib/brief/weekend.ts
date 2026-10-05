@@ -16,7 +16,7 @@ export interface WeekendFixture {
   clubRank: number | null;
   opponentRank: number | null;
   opponentForm: string | null;
-  thisWeekend: boolean;
+  isToday: boolean;
   /** The ready-to-share WhatsApp message for this fixture (item ①). */
   message: string;
   sourceUrl: string | null;
@@ -29,13 +29,12 @@ export interface Weekend {
   fixtures: WeekendFixture[];
 }
 
-function withinDays(dateISO: string | null, days: number, now: Date): boolean {
-  const m = dateISO?.match(/^(\d{4})-(\d{2})-(\d{2})/);
+/** True when the match falls on today's calendar day in Europe/Paris (FFBB dates are Paris-local). */
+function isTodayParis(dateISO: string | null, now: Date): boolean {
+  const m = dateISO?.match(/^(\d{4}-\d{2}-\d{2})/);
   if (!m) return false;
-  const day = Date.UTC(+m[1], +m[2] - 1, +m[3]);
-  const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
-  const diff = (day - today) / 86_400_000;
-  return diff >= -1 && diff <= days;
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(now);
+  return m[1] === today;
 }
 
 /**
@@ -71,7 +70,7 @@ export async function buildWeekend(catalog: Catalog, now: Date = new Date()): Pr
           clubRank,
           opponentRank,
           opponentForm,
-          thisWeekend: withinDays(match.dateISO, 7, now),
+          isToday: isTodayParis(match.dateISO, now),
           message: fixtureMessage({ clubTeam: team.label, match, clubRank, opponentRank, opponentForm }),
           sourceUrl: match.sourceUrl,
         };
