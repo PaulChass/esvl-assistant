@@ -54,14 +54,13 @@ export function buildTeam(e: RawEngagement): Team | null {
 export type { RawEngagement };
 
 /**
- * Compact catalog lines for the (cacheable) system-prompt head. DERIVES the
- * "équipe 1 (fanion) / équipe 2…" labels from the live division hierarchy (via levelRank),
- * so the model knows which senior team is the first team and stops guessing. Never hardcoded
- * → self-updates on promotion/relegation.
+ * "Équipe N" numbering of senior (SE) teams, per gender, by division level (via levelRank):
+ * engagementId → 1 (fanion), 2, … DERIVED from the live division hierarchy, never hardcoded →
+ * self-updates on promotion/relegation. Shared by the catalog lines and the resolver so the
+ * prompt and the tools always agree on which team is "l'équipe 3".
  */
-export function buildCatalogLines(teams: Team[]): string[] {
-  // Rank senior (SE) teams within each gender by division level → équipe 1, 2, …
-  const rankByEngagement = new Map<string, number>();
+export function seniorTeamNumbers(teams: Team[]): Map<string, number> {
+  const numbers = new Map<string, number>();
   const seniorsByGender = new Map<Gender, Team[]>();
   for (const t of teams) {
     if (t.category !== "SE") continue;
@@ -71,8 +70,18 @@ export function buildCatalogLines(teams: Team[]): string[] {
   }
   for (const arr of seniorsByGender.values()) {
     arr.sort((a, b) => levelRank(a.label) - levelRank(b.label));
-    arr.forEach((t, i) => rankByEngagement.set(t.engagementId, i + 1));
+    arr.forEach((t, i) => numbers.set(t.engagementId, i + 1));
   }
+  return numbers;
+}
+
+/**
+ * Compact catalog lines for the (cacheable) system-prompt head, with the derived
+ * "équipe 1 (fanion) / équipe 2…" labels so the model knows which senior team is which and
+ * stops guessing.
+ */
+export function buildCatalogLines(teams: Team[]): string[] {
+  const rankByEngagement = seniorTeamNumbers(teams);
 
   return teams.map((t) => {
     const g = t.gender === "F" ? "féminin" : t.gender === "M" ? "masculin" : "mixte";

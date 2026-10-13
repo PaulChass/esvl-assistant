@@ -69,4 +69,13 @@ export const CASES: EvalCase[] = [
     question: "Où joue l'U21 au prochain match ?",
     check: (r) => ({ pass: usedTool(r, "get_schedule"), reason: "route → get_schedule (venue)" }),
   },
+  {
+    id: "loisir-shorthand",
+    question: "Prochain match de la DM loisir ?",
+    check: (r) => {
+      // FFBB shorthand + "loisir" is unambiguous: answer it, don't ask which team.
+      const pass = usedTool(r, "get_schedule") && !answerHas(r, "laquelle", "préciser");
+      return { pass, reason: pass ? "resolved DM loisir directly" : "asked to disambiguate or skipped the tool" };
+    },
+  },
 ];

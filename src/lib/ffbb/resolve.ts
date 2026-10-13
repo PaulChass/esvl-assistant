@@ -1,5 +1,6 @@
+import { seniorTeamNumbers } from "./labels";
 import type { Gender, Team } from "./types";
-import { levelRank, normalize } from "./util";
+import { divisionNumber, isLoisir, levelRank, levelTier, normalize } from "./util";
 
 export type ResolveResult =
   | { kind: "match"; team: Team }
@@ -10,9 +11,14 @@ interface Intent {
   gender?: Gender;
   category?: string; // "SE" | "U9".."U21"
   codes: string[];
-  levelWords: string[];
+  tier?: number; // levelTier: 1 Nationale … 5 Départementale
+  division?: number;
+  loisir?: boolean;
   teamNumber?: number;
 }
+
+/** FFBB shorthand tier prefixes: "DM3" = Départementale Masculine division 3, "PRF" = Pré-régionale Féminine… */
+const ABBR_TIERS: Record<string, number> = { n: 1, pn: 2, r: 3, pr: 4, d: 5 };
 
 const CATEGORY_NICKNAMES: Record<string, string> = {
   poussins: "U11",
@@ -28,7 +34,7 @@ const CATEGORY_NICKNAMES: Record<string, string> = {
 /** Parse a fuzzy French team query into a matching intent. */
 function parseIntent(query: string, teams: Team[]): Intent {
   const q = normalize(query);
-  const intent: Intent = { codes: [], levelWords: [] };
+  const intent: Intent = { codes: [] };
 
   // explicit competition codes present in the query (strongest signal)
   for (const t of teams) {
@@ -52,11 +58,19 @@ function parseIntent(query: string, teams: Team[]): Intent {
     }
   }
 
-  // level words
-  if (/\bpre\s?regional/.test(q)) intent.levelWords.push("pre-regional");
-  else if (/\bregional/.test(q)) intent.levelWords.push("regional");
-  if (/\bdepartemental/.test(q)) intent.levelWords.push("departemental");
-  if (/\bnational/.test(q)) intent.levelWords.push("national");
+  // level: FFBB shorthand ("dm", "rf 2", "prm") or words ("régionale", "pré-région")
+  const abbr = q.match(/\b(pn|pr|n|r|d)([mf])\s?(\d)?\b/);
+  if (abbr) {
+    intent.tier = ABBR_TIERS[abbr[1]];
+    intent.gender ??= abbr[2] === "f" ? "F" : "M";
+    if (abbr[3]) intent.division = Number(abbr[3]);
+  } else {
+    const tier = levelTier(q);
+    if (tier < 6) intent.tier = tier;
+  }
+  const div = q.match(/\bdivision\s?(\d)\b/);
+  if (div) intent.division = Number(div[1]);
+  if (/\bloisirs?\b/.test(q)) intent.loisir = true;
 
   // "équipe 1 / 2", "première / deuxième"
   const numMatch = q.match(/\bequipe\s?(\d)\b/) || q.match(/\bnumero\s?(\d)\b/);
@@ -64,9 +78,9 @@ function parseIntent(query: string, teams: Team[]): Intent {
   else if (/\bpremiere?\b|\b1ere?\b/.test(q)) intent.teamNumber = 1;
   else if (/\bdeuxieme\b|\bseconde?\b|\b2eme?\b/.test(q)) intent.teamNumber = 2;
 
-  // "équipe 1/2" with no other signal conventionally means the seniors teams,
-  // ranked by division level.
-  if (intent.teamNumber && !intent.category && !intent.codes.length) intent.category = "SE";
+  // "équipe 1/2", "la DM", "la régionale" with no age category conventionally mean the
+  // seniors teams — youth teams are named by their category ("les U18").
+  if ((intent.teamNumber || intent.tier) && !intent.category && !intent.codes.length) intent.category = "SE";
 
   return intent;
 }
@@ -87,9 +101,15 @@ function score(team: Team, intent: Intent): number {
     else s -= 40;
   }
 
-  for (const w of intent.levelWords) {
-    if (label.includes(w.replace("-", " "))) s += 15;
+  if (intent.tier && levelTier(team.label) === intent.tier) s += 15;
+
+  if (intent.division) {
+    const d = divisionNumber(team.label);
+    if (d === intent.division) s += 10;
+    else if (d) s -= 10;
   }
+
+  if (intent.loisir) s += isLoisir(team.label) ? 30 : -30;
 
   return s;
 }
@@ -111,11 +131,18 @@ export function resolveTeam(query: string, teams: Team[]): ResolveResult {
 
   const topTie = scored.filter((x) => x.s === best.s);
 
-  // "équipe N": among the tied top teams, order by division and pick the Nth.
-  if (topTie.length > 1 && intent.teamNumber) {
-    const ordered = [...topTie].sort((a, b) => levelRank(a.team.label) - levelRank(b.team.label));
-    const pick = ordered[intent.teamNumber - 1];
-    if (pick) return { kind: "match", team: pick.team };
+  // "équipe N" = the senior team numbered N within its gender — the same derived numbering the
+  // catalog shows the model. Without a gender, "équipe 1" can hit both the men's and women's
+  // first teams: take the higher division (the club's fanion).
+  if (intent.teamNumber) {
+    const numbers = seniorTeamNumbers(teams);
+    const numbered = topTie.filter((x) => numbers.has(x.team.engagementId));
+    if (numbered.length) {
+      const hits = numbered
+        .filter((x) => numbers.get(x.team.engagementId) === intent.teamNumber)
+        .sort((a, b) => levelRank(a.team.label) - levelRank(b.team.label));
+      return hits.length ? { kind: "match", team: hits[0].team } : { kind: "none" };
+    }
   }
 
   if (topTie.length === 1 && best.s - (scored[1]?.s ?? -Infinity) >= 10) {

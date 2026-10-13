@@ -18,18 +18,39 @@ export function normalize(s: string): string {
 }
 
 /**
- * Division level rank, lower = higher level (Nationale > Régionale > Pré-régionale >
- * Départementale). Derived from the competition label so it self-updates on promotion/
- * relegation — never hardcode which team is "équipe 1". "pré régionale" is checked before
- * "régionale" because it also contains the substring "regional".
+ * Division tier, lower = higher level (Nationale > Pré-nationale > Régionale > Pré-régionale >
+ * Départementale). Works on a competition label or a user query. "pré …" is checked first
+ * because "pré régionale" also contains "région".
+ */
+export function levelTier(text: string): number {
+  const l = normalize(text);
+  if (/\bpre ?nationa/.test(l)) return 2;
+  if (/\bnationa/.test(l)) return 1;
+  if (/\bpre ?region/.test(l)) return 4;
+  if (/\bregion/.test(l)) return 3;
+  if (/\bdepartement/.test(l)) return 5;
+  return 6;
+}
+
+/** Division number within a tier ("… - Division 3", "Nationale masculine 2", "U13 - 3"); 0 if unnumbered. */
+export function divisionNumber(label: string): number {
+  const l = normalize(label);
+  const m = l.match(/\bdivision (\d)\b/) ?? l.match(/ (\d)$/);
+  return m ? Number(m[1]) : 0;
+}
+
+/** Loisir (leisure) championships are non-competitive. */
+export function isLoisir(label: string): boolean {
+  return /\bloisirs?\b/.test(normalize(label));
+}
+
+/**
+ * Division level rank, lower = higher level: tier first, then division number (Division 2 above
+ * Division 3), and loisir below every competitive division. Derived from the competition label
+ * so it self-updates on promotion/relegation — never hardcode which team is "équipe 1".
  */
 export function levelRank(label: string): number {
-  const l = normalize(label);
-  if (l.includes("national")) return 1;
-  if (l.includes("pre regional")) return 3;
-  if (l.includes("regional")) return 2;
-  if (l.includes("departemental")) return 4;
-  return 5;
+  return (isLoisir(label) ? 100 : 0) + levelTier(label) * 10 + divisionNumber(label);
 }
 
 const WEEKDAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
