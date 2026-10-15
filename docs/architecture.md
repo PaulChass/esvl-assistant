@@ -5,8 +5,8 @@
 ```
 src/
   app/
-    page.tsx            chat UI (client)
-    api/chat/route.ts   agent endpoint (server)
+    page.tsx            UI (client) — fetches FFBB data and runs the agent's tools in the browser
+    api/chat/route.ts   one agent step (server, holds the LLM key)
   lib/
     ffbb/               FFBB data layer (own client + domain model)
     llm/                provider-agnostic LLM interface (Anthropic + Google)
@@ -25,7 +25,7 @@ scripts/smoke.ts        live check of the data layer (no API key)
 
 Read access is public through a two-token bootstrap: `GET /items/configuration` returns `key_dh` (the Directus bearer). There is no signup and no personal key. Tokens rotate, so the client never hardcodes them — it caches the token for ~25 minutes and re-bootstraps on an auth failure.
 
-The API is served behind a CDN + WAF that **requires** `Origin` and `Referer` headers matching `competitions.ffbb.com`; the client sends them on every request (including the bootstrap), or the WAF returns a 403 HTML page instead of JSON.
+The API sits behind BunnyCDN with **Bunny Shield** enabled, which (since Oct 2026) answers requests from cloud providers — Vercel/AWS in every region — with a 403 HTML page. Ordinary visitors get through, and the API is CORS-open (`Access-Control-Allow-Origin: *`), so **in production the visitor's browser fetches the data**: the Matchs/Résultats briefs are built client-side, and the chat's tools run in the browser while `/api/chat` only runs one model step at a time (see `agentStep` in `src/lib/agent/run.ts`). CORS doesn't allow an `Authorization` header, so the bearer goes in Directus's `access_token` query parameter; a plain GET needs no preflight. Server-side callers (evals, scripts) still send `Origin`/`Referer` of `competitions.ffbb.com`, which the WAF has required in the past.
 
 ### Entity
 

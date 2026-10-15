@@ -1,10 +1,10 @@
 import { warmCatalog, type Catalog } from "@/lib/ffbb";
-import type { LlmProvider, LlmToolResult, LlmTurn, LlmUsage } from "@/lib/llm/types";
+import type { LlmProvider, LlmToolCall, LlmToolResult, LlmTurn, LlmUsage } from "@/lib/llm/types";
 import { addUsage, zeroUsage } from "@/lib/llm/types";
 import { buildSystemDynamic, buildSystemStatic } from "./system";
 import { dispatchTool, TOOLS } from "./tools";
 
-const MAX_STEPS = 5;
+export const MAX_STEPS = 5;
 
 export interface HistoryTurn {
   role: "user" | "assistant";
@@ -23,9 +23,59 @@ export interface AgentResult {
   toolCalls: AgentTrace[];
 }
 
+/** Conversation history + the new question, as provider-neutral turns. */
+export function initialTurns(history: HistoryTurn[], userMessage: string): LlmTurn[] {
+  const turns: LlmTurn[] = [];
+  for (const h of history) {
+    if (h.role === "assistant") turns.push({ role: "assistant", text: h.text, toolCalls: [] });
+    else turns.push({ role: "user", text: h.text });
+  }
+  turns.push({ role: "user", text: userMessage });
+  return turns;
+}
+
+export type AgentStep =
+  | { kind: "answer"; answer: string; usage: LlmUsage }
+  | { kind: "tools"; turns: LlmTurn[]; toolCalls: LlmToolCall[]; usage: LlmUsage };
+
 /**
- * The provider-agnostic agent loop: generate → (if tool calls) execute → feed results → repeat,
- * up to MAX_STEPS, then force a final answer. Works identically for Claude and Gemini.
+ * ONE model call of the agent loop. Either the model answers, or it asks for tools — the
+ * caller executes them and calls again with the results appended. Splitting the loop this way
+ * lets the tools run wherever the FFBB data is reachable: in the visitor's browser in
+ * production (FFBB's CDN blocks cloud servers), or in-process for evals. Past MAX_STEPS the
+ * model gets no tools, which forces a final answer.
+ */
+export async function agentStep(
+  provider: LlmProvider,
+  catalog: Catalog,
+  turns: LlmTurn[],
+  step: number,
+): Promise<AgentStep> {
+  const tools = step <= MAX_STEPS ? TOOLS : [];
+  const res = await provider.generate({
+    systemStatic: buildSystemStatic(catalog),
+    systemDynamic: buildSystemDynamic(),
+    tools,
+    turns,
+    maxTokens: 1024,
+  });
+
+  if (res.toolCalls.length === 0 || tools.length === 0) {
+    const answer = res.text.trim() || "Désolé, je n'ai pas réussi à répondre. Peux-tu reformuler ?";
+    return { kind: "answer", answer, usage: res.usage };
+  }
+  return {
+    kind: "tools",
+    turns: [...turns, { role: "assistant", text: res.text, toolCalls: res.toolCalls }],
+    toolCalls: res.toolCalls,
+    usage: res.usage,
+  };
+}
+
+/**
+ * The provider-agnostic agent loop, run in-process: generate → (if tool calls) execute → feed
+ * results → repeat, up to MAX_STEPS, then force a final answer. Used by the evals; the web chat
+ * drives the same agentStep from the browser. Works identically for Claude and Gemini.
  */
 export async function runAgent(
   provider: LlmProvider,
@@ -34,45 +84,20 @@ export async function runAgent(
   catalog?: Catalog,
 ): Promise<AgentResult> {
   const cat = catalog ?? (await warmCatalog());
-  const systemStatic = buildSystemStatic(cat);
-  const systemDynamic = buildSystemDynamic();
-
-  const turns: LlmTurn[] = [];
-  for (const h of history) {
-    if (h.role === "assistant") turns.push({ role: "assistant", text: h.text, toolCalls: [] });
-    else turns.push({ role: "user", text: h.text });
-  }
-  turns.push({ role: "user", text: userMessage });
-
+  let turns = initialTurns(history, userMessage);
   let usage = zeroUsage();
   const toolCalls: AgentTrace[] = [];
 
-  for (let step = 1; step <= MAX_STEPS; step++) {
-    const res = await provider.generate({ systemStatic, systemDynamic, tools: TOOLS, turns, maxTokens: 1024 });
+  for (let step = 1; ; step++) {
+    const res = await agentStep(provider, cat, turns, step);
     usage = addUsage(usage, res.usage);
-
-    if (res.toolCalls.length === 0) {
-      return { answer: res.text.trim(), usage, steps: step, toolCalls };
-    }
-
-    turns.push({ role: "assistant", text: res.text, toolCalls: res.toolCalls });
+    if (res.kind === "answer") return { answer: res.answer, usage, steps: Math.min(step, MAX_STEPS), toolCalls };
 
     const results: LlmToolResult[] = [];
     for (const call of res.toolCalls) {
       toolCalls.push({ name: call.name, input: call.input });
-      const content = await dispatchTool(call.name, call.input, cat);
-      results.push({ id: call.id, name: call.name, content });
+      results.push({ id: call.id, name: call.name, content: await dispatchTool(call.name, call.input, cat) });
     }
-    turns.push({ role: "tool", results });
+    turns = [...res.turns, { role: "tool", results }];
   }
-
-  // Hit the step cap — one more turn with no tools to force a final answer.
-  const final = await provider.generate({ systemStatic, systemDynamic, tools: [], turns, maxTokens: 1024 });
-  usage = addUsage(usage, final.usage);
-  return {
-    answer: final.text.trim() || "Désolé, je n'ai pas réussi à répondre. Peux-tu reformuler ?",
-    usage,
-    steps: MAX_STEPS,
-    toolCalls,
-  };
 }

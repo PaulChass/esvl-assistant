@@ -2,14 +2,14 @@
  * Configuration for the assistant.
  *
  * The FFBB backend is an undocumented Directus API used by competitions.ffbb.com.
- * Read access is public but WAF-gated: every request must send Origin + Referer of
- * competitions.ffbb.com. See docs/architecture.md.
+ * Read access is public, but its CDN firewall (Bunny Shield) blocks cloud servers — so in
+ * production the visitor's browser fetches the data. See docs/architecture.md.
  */
 
 export const FFBB_HOST = "https://api.ffbb.com";
 export const FFBB_WEB = "https://competitions.ffbb.com";
 
-/** Headers required on EVERY FFBB request (incl. the token bootstrap) or the WAF returns 403. */
+/** Sent on server-side FFBB requests (evals, scripts), which FFBB's WAF has required in the past. Browsers set their own. */
 export const FFBB_HEADERS: Record<string, string> = {
   Origin: FFBB_WEB,
   Referer: FFBB_WEB + "/",

@@ -49,22 +49,21 @@ It degrades gracefully when data isn't published yet (e.g. standings before the 
 
 ```
 Browser — three surfaces (Next.js)          src/app
-   Week-end · Résultats · Assistant
-      │            │            │
-      ▼            ▼            ▼
- /api/weekend  /api/recap   /api/chat        src/app/api
-      │            │            │
+   Matchs · Résultats · Assistant
+      │            │            │  ▲ tool calls / ▼ tool results
       │            │            ▼
-      │            │      Agent loop (provider-agnostic tool-use)   src/lib/agent
-      │            │            │
+      │            │        /api/chat — one agent step       src/app/api, src/lib/agent
+      │            │            │  (LLM key stays server-side)
       ▼            ▼            ▼
-   Brief builders (① ②)   LLM provider + FFBB tools    src/lib/brief, src/lib/llm
+   Brief builders (① ②)   FFBB tools (run in the browser)  src/lib/brief, src/lib/agent/tools.ts
       └────────────┴────────────┘
                    ▼
         FFBB data layer — own client + cache           src/lib/ffbb
                    ▼
-        api.ffbb.com  (Directus, public)
+        api.ffbb.com  (Directus, public, CORS-open)
 ```
+
+FFBB's CDN firewall blocks cloud servers, so **the visitor's browser fetches the FFBB data itself**; the server only runs the LLM. The chat loops: `/api/chat` returns the model's tool calls, the browser runs them against FFBB and posts the results back.
 
 See [`docs/architecture.md`](docs/architecture.md) for the data layer in detail (endpoints, auth bootstrap, field mapping, risks).
 

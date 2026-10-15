@@ -16,6 +16,18 @@ const TOKEN_TTL_MS = 25 * 60 * 1000;
 let token: { value: string; expires: number } | null = null;
 
 /**
+ * This client runs in the BROWSER in production (FFBB's CDN blocks cloud servers, so the
+ * visitor's own browser fetches the public data) and on Node for evals/scripts. Browsers
+ * forbid setting Origin/Referer, so those headers are only sent server-side.
+ */
+const HEADERS: Record<string, string> = typeof window === "undefined" ? FFBB_HEADERS : {};
+
+/** The bearer goes in the query string (Directus `access_token`): FFBB's CORS allows any
+ *  origin but not an Authorization header, and a plain GET needs no preflight. */
+const withToken = (path: string, bearer: string) =>
+  `${FFBB_HOST}${path}${path.includes("?") ? "&" : "?"}access_token=${encodeURIComponent(bearer)}`;
+
+/**
  * Public two-token bootstrap. GET /items/configuration returns key_dh (the Directus
  * bearer). No signup, no personal key. Tokens rotate, so we never hardcode them and
  * re-bootstrap on auth failure.
@@ -24,7 +36,7 @@ async function bootstrap(force = false): Promise<string> {
   const now = Date.now();
   if (!force && token && now < token.expires) return token.value;
 
-  const res = await fetch(`${FFBB_HOST}/items/configuration`, { headers: FFBB_HEADERS });
+  const res = await fetch(`${FFBB_HOST}/items/configuration`, { headers: HEADERS });
   if (!res.ok) throw new FfbbError(`FFBB configuration bootstrap failed`, res.status);
 
   const json = (await res.json()) as { data?: { key_dh?: string } };
@@ -44,9 +56,7 @@ async function rawGet<T>(path: string): Promise<T> {
   for (let attempt = 0; attempt < 4; attempt++) {
     let res: Response;
     try {
-      res = await fetch(`${FFBB_HOST}${path}`, {
-        headers: { ...FFBB_HEADERS, Authorization: `Bearer ${bearer}` },
-      });
+      res = await fetch(withToken(path, bearer), { headers: HEADERS });
     } catch (e) {
       if (attempt < 3) {
         await sleep(300 * 2 ** attempt);

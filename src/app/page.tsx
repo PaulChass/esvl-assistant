@@ -1,10 +1,11 @@
 "use client";
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import { dispatchTool } from "@/lib/agent/tools";
 import { outcomeLabel, resultMessage } from "@/lib/brief/format";
-import type { Recap } from "@/lib/brief/recap";
-import type { Weekend, WeekendFixture } from "@/lib/brief/weekend";
-import type { Match } from "@/lib/ffbb";
+import { buildRecap, type Recap } from "@/lib/brief/recap";
+import { buildWeekend, type Weekend, type WeekendFixture } from "@/lib/brief/weekend";
+import { warmCatalog, type Match } from "@/lib/ffbb";
 
 // Club identity (defaults = ESVL). Override via NEXT_PUBLIC_CLUB_* env vars — see src/config.ts.
 const DEFAULT_ORG = process.env.NEXT_PUBLIC_CLUB_ORG_ID ?? "10135";
@@ -128,7 +129,7 @@ export default function Home() {
 
       {tab === "weekend" && <WeekendPanel org={DEFAULT_ORG} />}
       {tab === "recap" && <RecapPanel org={DEFAULT_ORG} />}
-      {tab === "chat" && <ChatPanel />}
+      {tab === "chat" && <ChatPanel org={DEFAULT_ORG} />}
 
       <footer className="footer">
         Assistant non officiel, non affilié à la FFBB. Données publiques FFBB, mises en cache. Projet de démonstration.
@@ -145,14 +146,14 @@ function WeekendPanel({ org }: { org: string }) {
   useEffect(() => {
     let alive = true;
     ping("weekend_view", org);
-    fetch(`/api/weekend?org=${org}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!alive) return;
-        if (d.error) setError(d.error);
-        else setData(d);
-      })
-      .catch(() => alive && setError("Impossible de charger les rencontres."));
+    // Fetched by the browser itself: FFBB's CDN blocks cloud servers (see src/lib/ffbb/http.ts).
+    warmCatalog(org)
+      .then((catalog) => buildWeekend(catalog))
+      .then((d) => alive && setData(d))
+      .catch((e) => {
+        console.error("[weekend]", e);
+        if (alive) setError("Impossible de charger les rencontres.");
+      });
     return () => {
       alive = false;
     };
@@ -277,14 +278,13 @@ function RecapPanel({ org }: { org: string }) {
   useEffect(() => {
     let alive = true;
     ping("recap_view", org);
-    fetch(`/api/recap?org=${org}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (!alive) return;
-        if (d.error) setError(d.error);
-        else setData(d);
-      })
-      .catch(() => alive && setError("Impossible de charger les résultats."));
+    warmCatalog(org)
+      .then((catalog) => buildRecap(catalog))
+      .then((d) => alive && setData(d))
+      .catch((e) => {
+        console.error("[recap]", e);
+        if (alive) setError("Impossible de charger les résultats.");
+      });
     return () => {
       alive = false;
     };
@@ -519,7 +519,14 @@ function linkify(text: string) {
 
 const fmtUsd = (v: number) => (v === 0 ? "$0" : v < 0.01 ? `$${v.toFixed(4)}` : `$${v.toFixed(3)}`);
 
-function ChatPanel() {
+const addUsage = (a: Usage, b: Usage): Usage => ({
+  inputTokens: a.inputTokens + b.inputTokens,
+  outputTokens: a.outputTokens + b.outputTokens,
+  cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
+  cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
+});
+
+function ChatPanel({ org }: { org: string }) {
   const vendor: Vendor = "anthropic"; // Claude only for now (provider stays swappable under the hood)
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -541,25 +548,48 @@ function ChatPanel() {
       setMessages((prev) => [...prev, { role: "user", text: message }]);
       setLoading(true);
       try {
-        const res = await fetch("/api/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message, history, vendor }),
-        });
-        const data = await res.json();
-        if (!res.ok) setError(data.error ?? "Erreur inattendue.");
-        else
-          setMessages((prev) => [
-            ...prev,
-            { role: "assistant", text: data.answer, meta: { model: data.model, usage: data.usage, cost: data.cost, toolCalls: data.toolCalls } },
-          ]);
-      } catch {
-        setError("Impossible de contacter le serveur.");
+        // The model runs server-side; its FFBB tools run HERE, in the browser, because FFBB's CDN
+        // blocks cloud servers. Each /api/chat call is one model step: it either answers, or
+        // returns tool calls that we execute and post back with the conversation so far.
+        const catalog = await warmCatalog(org);
+        let usage: Usage = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
+        let usd = 0;
+        const toolCalls: Meta["toolCalls"] = [];
+        let turns: unknown[] | undefined;
+        for (let step = 1; step <= 8; step++) {
+          const res = await fetch("/api/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message, history, vendor, catalog, turns, step }),
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            setError(data.error ?? "Erreur inattendue.");
+            return;
+          }
+          usage = addUsage(usage, data.usage);
+          usd += data.cost.usd;
+          if (typeof data.answer === "string") {
+            const meta: Meta = { model: data.model, usage, cost: { usd, usdPerThousand: usd * 1000 }, toolCalls };
+            setMessages((prev) => [...prev, { role: "assistant", text: data.answer, meta }]);
+            return;
+          }
+          const calls = data.toolCalls as { id: string; name: string; input: Record<string, unknown> }[];
+          toolCalls.push(...calls.map((c) => ({ name: c.name, input: c.input })));
+          const results = await Promise.all(
+            calls.map(async (c) => ({ id: c.id, name: c.name, content: await dispatchTool(c.name, c.input, catalog) })),
+          );
+          turns = [...data.turns, { role: "tool", results }];
+        }
+        setError("Désolé, je n'ai pas réussi à répondre. Peux-tu reformuler ?");
+      } catch (e) {
+        console.error("[chat]", e);
+        setError("Impossible de charger les données ou de contacter le serveur.");
       } finally {
         setLoading(false);
       }
     },
-    [loading, messages, vendor],
+    [loading, messages, org, vendor],
   );
 
   return (
