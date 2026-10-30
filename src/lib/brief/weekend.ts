@@ -1,5 +1,6 @@
 import type { Catalog } from "@/lib/ffbb";
 import { nextMatchForTeam, standingForTeam, teamFormInPoule } from "@/lib/ffbb";
+import { todayParis } from "@/lib/ffbb/util";
 import { fixtureMessage, formLine, homeAwayLabel, mapsUrl } from "./format";
 
 export interface WeekendFixture {
@@ -32,9 +33,7 @@ export interface Weekend {
 /** True when the match falls on today's calendar day in Europe/Paris (FFBB dates are Paris-local). */
 function isTodayParis(dateISO: string | null, now: Date): boolean {
   const m = dateISO?.match(/^(\d{4}-\d{2}-\d{2})/);
-  if (!m) return false;
-  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(now);
-  return m[1] === today;
+  return !!m && m[1] === todayParis(now);
 }
 
 /**

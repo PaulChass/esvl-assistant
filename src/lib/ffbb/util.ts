@@ -53,6 +53,11 @@ export function levelRank(label: string): number {
   return (isLoisir(label) ? 100 : 0) + levelTier(label) * 10 + divisionNumber(label);
 }
 
+/** Today's calendar day in Europe/Paris as "YYYY-MM-DD" — FFBB dates are Paris-local naive strings. */
+export function todayParis(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Paris" }).format(now);
+}
+
 const WEEKDAYS = ["dim.", "lun.", "mar.", "mer.", "jeu.", "ven.", "sam."];
 const MONTHS = [
   "janv.", "févr.", "mars", "avr.", "mai", "juin",

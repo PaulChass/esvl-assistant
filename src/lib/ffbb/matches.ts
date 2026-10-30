@@ -1,7 +1,7 @@
 import { FFBB_WEB, TTL } from "@/config";
 import { directusGet } from "./http";
 import type { Catalog, Match, Team } from "./types";
-import { formatFrDate, formatTime, num } from "./util";
+import { formatFrDate, formatTime, num, todayParis } from "./util";
 
 interface RawRencontre {
   id: string;
@@ -100,13 +100,24 @@ function dedupe(matches: Match[]): Match[] {
   });
 }
 
+/**
+ * A fixture worth showing as upcoming. `joue` alone isn't enough: FFBB leaves it false until the
+ * score is entered — sometimes weeks late — so the date must be today or later (Paris). Byes
+ * ("exempt") are stored as fixtures with an empty side and no opponent club: not a match.
+ */
+function isUpcoming(m: Match, today: string): boolean {
+  return !m.played && !!m.dateISO && m.dateISO.slice(0, 10) >= today && !!m.opponent?.trim();
+}
+
 /** Upcoming matches for one team, soonest first. */
 export async function nextMatchesForTeam(catalog: Catalog, team: Team, limit: number): Promise<Match[]> {
   const all = await pouleRencontres(team.pouleId);
+  const today = todayParis();
   const matches = all
     .filter((r) => involves(r, catalog.orgId) && !r.joue)
     .sort((a, b) => (a.date ?? "").localeCompare(b.date ?? ""))
-    .map((r) => toMatch(r, team.label, catalog.orgId));
+    .map((r) => toMatch(r, team.label, catalog.orgId))
+    .filter((m) => isUpcoming(m, today));
   return dedupe(matches).slice(0, limit);
 }
 
@@ -130,10 +141,14 @@ export async function clubLastResults(catalog: Catalog, limit: number): Promise<
 
 /** Upcoming matches across every team of the club, soonest first. */
 export async function clubNextMatches(catalog: Catalog, limit: number): Promise<Match[]> {
+  const today = todayParis();
   const perTeam = await Promise.all(
     catalog.teams.map(async (t) => {
       const all = await pouleRencontres(t.pouleId);
-      return all.filter((r) => involves(r, catalog.orgId) && !r.joue).map((r) => toMatch(r, t.label, catalog.orgId));
+      return all
+        .filter((r) => involves(r, catalog.orgId) && !r.joue)
+        .map((r) => toMatch(r, t.label, catalog.orgId))
+        .filter((m) => isUpcoming(m, today));
     }),
   );
   const matches = perTeam
